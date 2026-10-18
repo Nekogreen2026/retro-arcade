@@ -8,4 +8,5 @@
  */
 window.GAMES = [
   { id: 'iai', title: '居合', desc: '鬼を斬れ。猫天使は斬るな。', color: 'red', thumb: ['assets/oni.png', 'assets/neko.png'] },
+  { id: 'kinshi', title: '菌糸ライフ', desc: '菌を育てよ。萎れても標本だ。', color: 'green', thumb: ['assets/plain-spore.png', 'assets/plain-young.png', 'assets/plain-adult.png'] },
 ];
