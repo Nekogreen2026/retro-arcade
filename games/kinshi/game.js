@@ -6,7 +6,7 @@
  * と育つ。湿度・温度・光の3つのつまみで、育つ速さ・しおれるまでの長さ・変種が変わる。
  * 変種は「胞子と幼菌のあいだ、どの環境にどれだけいたか」で決まる。条件は画面には出さない。
  * ケースの湿度・温度は、つまみに季節（現実の日付）と名古屋の実際の気温・湿度が少し加わったものになる。
- * 名古屋に台風・猛暑・長雨・初霜が来ているあいだは、それぞれ特別な変種が出やすくなる（天気は weather.js）。
+ * 名古屋に台風・猛暑・長雨・初霜が来ているあいだは、それぞれ特別な変種が出やすくなる（天気は shared/weather.js）。
  * 時間は実時間で進む。閉じていたあいだの分は、開いたときに前回の時刻からまとめて進める。
  * URL に ?debug=1 を付けたときだけ、早送りと、季節・天候を切り替えるボタンを出す。
  */
@@ -16,7 +16,7 @@
   const P = RA.P;
   const W = RA.W;
   const H = RA.H;
-  const WX = window.KinshiWeather;
+  const WX = RA.Weather;
 
   const canvas = document.getElementById('screen');
   const ctx = RA.setupScreen(canvas);
@@ -63,7 +63,7 @@
   const STAGE_NAME = { spore: '胞子', young: '幼菌', adult: '成菌', wilted: 'しおれ', dried: '標本' };
   const STAGE_COLOR = { spore: 'silver', young: 'cream', adult: 'gold', wilted: 'mist', dried: 'orange' };
 
-  // 季節（期間は weather.js）。hum・temp は季節によるケースの湿度・温度のずれ（つまみ1段＝1）
+  // 季節（期間は shared/weather.js）。hum・temp は季節によるケースの湿度・温度のずれ（つまみ1段＝1）
   const SEASON_FX = {
     spring: { hum: 0, temp: 0, color: 'pink' },
     rainy: { hum: 0.5, temp: 0.25, color: 'cyan' },
@@ -73,7 +73,7 @@
   };
   const SEASONS = WX.SEASONS.map((s) => Object.assign({}, SEASON_FX[s.id], s));
 
-  // 天候イベント（判定は weather.js）。並び＝空模様と環境音で優先する順
+  // 天候イベント（判定は shared/weather.js）。並び＝空模様と環境音で優先する順
   const EVENTS = [
     { id: 'typhoon', name: '台風', color: 'cyan', hello: '台風だ。胞子が飛んでくる' },
     { id: 'heat', name: '猛暑', color: 'red', hello: '猛暑だ。陽炎がゆらめく' },

@@ -1,6 +1,14 @@
 /*
- * トップページ — 夜のゲームセンターの店内。
- * games.js の一覧どおりに筐体を横に並べ、選んだ筐体のゲームへ入る。
+ * トップページ — にゃらゲームプラザ（1996年、名古屋・大須のゲームセンター）。
+ * 場面の流れ:
+ *   title  … 現在の大須。店はシャッターが下り、ネオンも消えている（最初のタップで音声を有効化）
+ *   slip   … 年が1996年まで巻き戻り、店に灯りが戻る
+ *   street … 画面1 街並み。壁のポスターからは、そのゲームへ直接入れる
+ *   enter  … 画面2 入店。自動ドアが左右に開き、商店街の音が店内のゲーム音に入れ替わる
+ *   inside … 画面3 店内。筐体からゲームへ入る。「外に出る」で exit を通って street へ
+ *   leave  … ゲームへ入るときの暗転
+ * ゲームから戻ってきたときは、出たところ（店内か街）から始まる（タイトルと巻き戻しは省く）。
+ * 街・店内・空・音はそれぞれ plaza/ のファイルにあり、ここは場面の切り替えと入力をまとめる。
  */
 (function () {
   'use strict';
@@ -8,403 +16,348 @@
   const P = RA.P;
   const W = RA.W;
   const H = RA.H;
-  const GAMES = (window.GAMES || []).filter((g) => g && g.id);
+  const Plaza = window.Plaza;
+  const { seeded, makeCanvas, ease, clamp, jstNow } = Plaza.kit;
+  const { street, inside, sky, sound } = Plaza;
 
   const canvas = document.getElementById('screen');
   const ctx = RA.setupScreen(canvas);
-
-  // ===== 配置 =====
-  const CAB_W = 48;
-  const PITCH = 62; // 筐体の間隔
-  const EDGE = 11; // 左右の余白
-  const CAB_TOP = 50;
-  const FLOOR_Y = 152;
-  const STRIP_Y = 186; // 操作説明の帯
-  const PANEL_Y = 198; // 説明パネル
-  const MIN_SLOTS = 4; // 台数が少ないときは調整中の筐体で埋める
-  const SLOTS = Math.max(MIN_SLOTS, GAMES.length);
-  const MAX_CAM = Math.max(0, EDGE * 2 + (SLOTS - 1) * PITCH + CAB_W - W);
-  const LEAVE_TIME = 420;
+  const DEBUG = new URLSearchParams(location.search).get('debug') === '1';
   const MOBILE = RA.isMobile();
 
-  const slotX = (i) => EDGE + i * PITCH;
-  const urlOf = (g) => 'games/' + g.id + '/index.html';
+  // ===== 時間（ミリ秒） =====
+  const ROLL = 1800; // 年が巻き戻る
+  const FLASH = 160; // 着いた瞬間の白い光
+  const REVEAL = 700; // 光が引いて1996年の街が見えてくる
+  const DOOR_OPEN = 700; // 自動ドアが開ききるまで
+  const ZOOM = 520; // ドアの向こうが画面いっぱいに広がるまで
+  const WALK_MAX = 900; // 入店の前にプラザの正面へ戻る上限
+  const LEAVE_TIME = 420;
+  const RETURN_KEY = ['top', 'return'];
+  const RETURN_MAX = 12 * 3600 * 1000; // これより前に出たきりなら、タイトルから
+  const PEEK_Y = 80; // ドアのすきまから見える店内を、これだけ上から持ってくる（筐体が見えるように）
 
   // ===== 状態 =====
-  const lastId = RA.Store.get(['top', 'last-game'], null);
-  let sel = Math.max(0, GAMES.findIndex((g) => g.id === lastId));
-  let cam = 0;
-  let camTarget = 0;
-  let leaving = null; // { at, url }
+  let scene = 'loading';
+  let sceneAt = 0;
+  let doorAt = 0; // 入店で扉が開きはじめた時刻（0 はまだ）
+  let closing = false; // 外に出るとき、扉が閉まりはじめたか
+  let arrived = false; // 巻き戻しが1996年に着いたか（着いてから商店街の音を出す）
+  let leaving = null; // { url, from }
   let lastTs = 0;
+  const yearNow = jstNow(Date.now()).y;
 
-  function follow() {
-    const x = slotX(sel);
-    if (x - camTarget < EDGE) camTarget = x - EDGE;
-    if (x + CAB_W - camTarget > W - EDGE) camTarget = x + CAB_W - (W - EDGE);
-    camTarget = Math.max(0, Math.min(MAX_CAM, camTarget));
-  }
-  follow();
-  cam = camTarget;
+  const buf = makeCanvas(W, H);
+  const bctx = buf.getContext('2d');
+  bctx.imageSmoothingEnabled = false;
 
-  // ===== 筐体の画面に映す絵 =====
-  const thumbs = GAMES.map((g) => {
-    const list = g.thumb ? (Array.isArray(g.thumb) ? g.thumb : [g.thumb]) : [];
-    return list.map((src) => {
-      const im = new Image();
-      im.src = 'games/' + g.id + '/' + src;
-      return im;
-    });
-  });
-
-  // ===== 背景（天井・壁・床）を一度だけ描く =====
-  const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
-  const bayer = (x, y) => (BAYER[(y & 3) * 4 + (x & 3)] + 0.5) / 16;
-
-  function seeded(seed) {
-    let s = seed >>> 0;
-    return () => {
-      s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
-      return s / 4294967296;
-    };
+  function go(s) {
+    scene = s;
+    sceneAt = performance.now();
   }
 
-  function makeCanvas(w, h) {
-    const c = document.createElement('canvas');
-    c.width = w;
-    c.height = h;
-    return c;
-  }
-
-  function paintRoom() {
-    const c = makeCanvas(W, H);
-    const g = c.getContext('2d');
-    // 壁
-    g.fillStyle = P.night;
-    g.fillRect(0, 0, W, FLOOR_Y);
-    // 腰板
-    g.fillStyle = P.dusk;
-    g.fillRect(0, 128, W, 1);
-    g.fillStyle = P.ink;
-    for (let x = 0; x < W; x += 16) g.fillRect(x, 129, 1, FLOOR_Y - 129);
-    // 天井
-    g.fillStyle = P.ink;
-    g.fillRect(0, 0, W, 6);
-    // 床（ゲーセンの派手なじゅうたん）
-    g.fillStyle = P.ink;
-    g.fillRect(0, FLOOR_Y, W, H - FLOOR_Y);
-    const rnd = seeded(77);
-    const marks = ['pink', 'cyan', 'gold', 'blue'];
-    for (let ty = FLOOR_Y + 2; ty < STRIP_Y - 2; ty += 8) {
-      for (let tx = (ty / 8) % 2 ? 0 : 6; tx < W; tx += 12) {
-        const color = marks[Math.floor(rnd() * marks.length)];
-        const shape = Math.floor(rnd() * 3);
-        g.fillStyle = P[color];
-        if (shape === 0) {
-          g.fillRect(tx, ty, 1, 1);
-          g.fillRect(tx + 1, ty + 1, 1, 1);
-          g.fillRect(tx + 2, ty + 2, 1, 1);
-        } else if (shape === 1) {
-          g.fillRect(tx + 1, ty, 1, 3);
-          g.fillRect(tx, ty + 1, 3, 1);
-        } else {
-          g.fillRect(tx, ty + 1, 2, 1);
-        }
-      }
-    }
-    // 床の手前の帯（操作説明）と説明パネルの台
-    g.fillStyle = P.ink;
-    g.fillRect(0, STRIP_Y, W, H - STRIP_Y);
-    g.fillStyle = P.dusk;
-    g.fillRect(0, STRIP_Y, W, 1);
-    return c;
-  }
-
-  // 天井灯から落ちる光（ディザで薄く）
-  function paintCone() {
-    const c = makeCanvas(76, FLOOR_Y);
-    const g = c.getContext('2d');
-    g.fillStyle = P.dusk;
-    for (let y = 6; y < FLOOR_Y; y++) {
-      const half = 6 + ((y - 6) / (FLOOR_Y - 6)) * 32;
-      for (let x = Math.ceil(38 - half); x < 38 + half; x++) {
-        if (bayer(x, y) < 0.32) g.fillRect(x, y, 1, 1);
-      }
-    }
-    g.fillStyle = P.silver;
-    g.fillRect(30, 3, 16, 2);
-    g.fillStyle = P.cream;
-    g.fillRect(32, 5, 12, 1);
-    return c;
-  }
-
-  // 選んだ筐体の足もとの照り返し
-  function paintGlow() {
-    const c = makeCanvas(72, 14);
-    const g = c.getContext('2d');
-    g.fillStyle = P.dusk;
-    for (let y = 0; y < 14; y++) {
-      const half = 36 * Math.sqrt(1 - (y / 14) ** 2);
-      for (let x = Math.ceil(36 - half); x < 36 + half; x++) if (bayer(x, y) < 0.5) g.fillRect(x, y, 1, 1);
-    }
-    return c;
-  }
-
-  const room = paintRoom();
-  const cone = paintCone();
-  const glow = paintGlow();
-
-  // ===== 筐体 =====
   function rect(color, x, y, w, h) {
     ctx.fillStyle = P[color];
     ctx.fillRect(x, y, w, h);
   }
 
-  function drawThumb(game, i, x, y, ts) {
-    const list = thumbs[i].filter((im) => im.complete && im.naturalWidth);
-    if (!list.length) {
-      RA.text(ctx, Array.from(game.title)[0] || '?', x + 20, y + 9, { color: game.color || 'cream', align: 'center' });
-      return;
+  // ゲームから戻ってきたなら、出たところから（記録は読んだら消す）
+  function readReturn() {
+    let r = null;
+    try {
+      r = JSON.parse(RA.Store.get(RETURN_KEY, 'null'));
+    } catch (e) {
+      r = null;
     }
-    const im = list[Math.floor(ts / 1600) % list.length];
-    let s = Math.floor(Math.min(32 / im.naturalWidth, 32 / im.naturalHeight));
-    if (s < 1) s = Math.min(32 / im.naturalWidth, 32 / im.naturalHeight);
-    const w = Math.round(im.naturalWidth * s);
-    const h = Math.round(im.naturalHeight * s);
-    ctx.drawImage(im, x + 4 + Math.round((32 - w) / 2), y + 1 + (32 - h), w, h);
+    RA.Store.set(RETURN_KEY, 'null');
+    if (!r || (r.scene !== 'inside' && r.scene !== 'street')) return null;
+    const age = Date.now() - r.at;
+    return age >= 0 && age < RETURN_MAX ? r.scene : null;
+  }
+  const back = readReturn();
+  if (back) arrived = true;
+
+  // ===== 白い光が引いていくディザ（4×4 の升目のうち、k 個が白いまま） =====
+  const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+  const veils = Array.from({ length: 17 }, (_, k) => {
+    const c = makeCanvas(4, 4);
+    const g = c.getContext('2d');
+    g.fillStyle = P.white;
+    BAYER.forEach((v, i) => v < k && g.fillRect(i % 4, Math.floor(i / 4), 1, 1));
+    return ctx.createPattern(c, 'repeat');
+  });
+
+  function veil(k) {
+    k = clamp(Math.round(k * 16), 0, 16);
+    if (!k) return;
+    ctx.fillStyle = veils[k];
+    ctx.fillRect(0, 0, W, H);
   }
 
-  // 看板の文字。入りきらなければ流す
-  function drawMarquee(text, x, y, w, color, ts) {
-    const tw = RA.textWidth(text);
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(x, y, w, 18);
-    ctx.clip();
-    if (tw <= w) {
-      RA.text(ctx, text, x + w / 2, y, { color, align: 'center' });
+  // ===== 各場面 =====
+  function drawStreet(ts, st, o) {
+    const r = street.draw(ctx, ts, Object.assign({ st }, o));
+    if (r.thunder) sound.sfx.thunder();
+  }
+
+  // 札（墨の地に宵闇の縁）
+  function plate(x, y, w, h) {
+    rect('dusk', x, y, w, h);
+    rect('ink', x + 1, y + 1, w - 2, h - 2);
+  }
+
+  function drawTitle(ts, st) {
+    drawStreet(ts, st, { era: 'now', hud: true });
+    plate(28, 80, 200, 20);
+    RA.text(ctx, 'まだ、光っていたころへ。', 128, 81, { color: 'cream', align: 'center' });
+    if (Math.floor(ts / 500) % 2 === 0) {
+      RA.text(ctx, MOBILE ? 'タップで1996年へ' : 'クリック／スペースで1996年へ', 128, street.VIEW_H + 5, { color: 'gold', align: 'center' });
+    }
+  }
+
+  // 画面の行を左右にずらし、色の線を走らせる（巻き戻し中のノイズ）
+  function glitch(t, p) {
+    const rnd = seeded(Math.floor(t / 45) + 1);
+    const n = 2 + Math.floor(p * 10);
+    for (let i = 0; i < n; i++) {
+      const y = Math.floor(rnd() * street.VIEW_H);
+      const h = 1 + Math.floor(rnd() * 6);
+      const dx = Math.round((rnd() * 2 - 1) * (2 + p * 14));
+      ctx.drawImage(canvas, 0, y, W, h, dx, y, W, h);
+    }
+    const COLORS = ['cyan', 'pink', 'white', 'gold'];
+    for (let i = 0; i < Math.floor(p * 5); i++) rect(COLORS[i % COLORS.length], 0, Math.floor(rnd() * street.VIEW_H), W, 1);
+  }
+
+  function drawSlip(ts, st) {
+    const t = performance.now() - sceneAt;
+    const p = clamp(t / ROLL, 0, 1);
+    // 終わりに近づくほど、灯りのともった1996年の姿がちらちらと混ざる
+    let era = 'now';
+    if (t >= ROLL) era = '1996';
+    else if (p > 0.55) era = Math.floor(t / (p > 0.85 ? 40 : 90)) % 2 ? '1996' : 'now';
+    const year = Math.round(yearNow - (yearNow - Plaza.YEAR) * ease(p));
+    drawStreet(ts, st, { era, hud: true, year, ui: t >= ROLL });
+    if (t < ROLL) glitch(t, p);
+    if (t < ROLL + FLASH) {
+      plate(40, 86, 176, 44);
+      RA.text(ctx, String(year), 52, 92, { font: 'en', size: 32, color: 'gold' });
+      RA.text(ctx, '年', 184, 89, { size: 32, color: 'gold' });
+    }
+    if (t >= ROLL && !arrived) {
+      arrived = true;
+      sound.sfx.arrive();
+    }
+    if (t >= ROLL && t < ROLL + FLASH) rect('white', 0, 0, W, H);
+    else if (t >= ROLL + FLASH) veil(1 - (t - ROLL - FLASH) / REVEAL);
+    if (t >= ROLL + FLASH + REVEAL) go('street');
+  }
+
+  // ドアのすきま（k＝0）から画面いっぱい（k＝1）までの窓と、そこに映す店内の位置
+  function opening(k) {
+    const d = street.doorRect();
+    const lerp = (a, b) => Math.round((a + (b - a) * k) / 2) * 2;
+    const x0 = lerp(d.x, 0);
+    const y0 = lerp(d.y, 0);
+    const x1 = lerp(d.x + d.w, W);
+    const y1 = lerp(d.y + d.h, H);
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0, dy: Math.round(PEEK_Y * (1 - k)) };
+  }
+
+  function peek(r) {
+    if (r.w <= 0 || r.h <= 0) return;
+    ctx.drawImage(buf, r.x, r.y - r.dy, r.w, r.h, r.x, r.y, r.w, r.h);
+  }
+
+  // 入店。プラザの正面に戻ってから扉が開き、すきまの向こうの店内が画面いっぱいに広がる。返り値は音の mix
+  function drawEnter(ts, st) {
+    const now = performance.now();
+    if (!doorAt && (street.home() || now - sceneAt > WALK_MAX)) {
+      street.home(true);
+      doorAt = now;
+      sound.sfx.door();
+    }
+    const td = doorAt ? now - doorAt : 0;
+    const open = doorAt ? ease(td / DOOR_OPEN) : 0;
+    drawStreet(ts, st, { era: '1996', door: open });
+    if (!doorAt) return 0;
+    inside.draw(bctx, ts, { hud: false });
+    const k = ease((td - DOOR_OPEN) / ZOOM);
+    if (td < DOOR_OPEN) {
+      const g = street.doorGap(open);
+      peek(Object.assign(g, { dy: PEEK_Y }));
     } else {
-      const loop = tw + 24;
-      const off = Math.floor(ts / 40) % loop;
-      RA.text(ctx, text, x + w - off, y, { color });
-      RA.text(ctx, text, x + w - off + loop, y, { color });
+      peek(opening(k));
     }
-    ctx.restore();
+    if (td >= DOOR_OPEN + ZOOM) go('inside');
+    return 0.7 * open + 0.3 * k;
   }
 
-  function drawCabinet(i, x, ts) {
-    const game = GAMES[i];
-    const y = CAB_TOP;
-    const lit = !!game;
-    const body = lit ? 'silver' : 'mist';
-    const shade = lit ? 'mist' : 'dusk';
-
-    // 外形
-    rect('ink', x, y, CAB_W, FLOOR_Y - y);
-    // 看板
-    rect(body, x + 1, y + 1, CAB_W - 2, 2);
-    rect(lit ? game.color || 'red' : 'dusk', x + 2, y + 3, CAB_W - 4, 17);
-    if (lit) drawMarquee(game.title, x + 2, y + 2, CAB_W - 4, 'cream', ts);
-    // 画面まわり
-    rect(body, x + 1, y + 21, CAB_W - 2, 37);
-    rect(shade, x + 1, y + 21, 2, 37);
-    rect(shade, x + CAB_W - 3, y + 21, 2, 37);
-    rect('ink', x + 4, y + 23, 40, 34);
-    if (lit) {
-      rect('night', x + 5, y + 24, 38, 32);
-      drawThumb(game, i, x + 4, y + 23, ts);
-      rect('white', x + 6, y + 25, 2, 1); // 画面の映り込み
+  // 外に出る。店内が扉の大きさまで縮み、扉が閉まる
+  function drawExit(ts, st) {
+    const t = performance.now() - sceneAt;
+    const k = 1 - ease(t / ZOOM);
+    const open = t < ZOOM ? 1 : 1 - ease((t - ZOOM) / DOOR_OPEN);
+    if (t >= ZOOM && !closing) {
+      closing = true;
+      sound.sfx.door();
     }
-    // 操作盤（手前に少し張り出す）
-    rect('ink', x - 2, y + 57, CAB_W + 4, 11);
-    rect(shade, x - 1, y + 58, CAB_W + 2, 9);
-    rect(body, x - 1, y + 58, CAB_W + 2, 2);
-    rect('ink', x + 11, y + 57, 1, 3); // レバー
-    rect(lit ? 'red' : 'maroon', x + 10, y + 55, 3, 3);
-    rect(lit ? 'gold' : 'dusk', x + 26, y + 61, 3, 2);
-    rect(lit ? 'cyan' : 'dusk', x + 32, y + 61, 3, 2);
-    rect(lit ? 'pink' : 'dusk', x + 38, y + 61, 3, 2);
-    // 下の胴
-    rect(body, x + 1, y + 68, CAB_W - 2, FLOOR_Y - y - 72);
-    rect(shade, x + 1, y + 68, 2, FLOOR_Y - y - 72);
-    rect(shade, x + CAB_W - 3, y + 68, 2, FLOOR_Y - y - 72);
-    if (lit) rect(game.color || 'red', x + 5, y + 72, 2, 24); // 側面の色帯
-    // コインドア
-    rect('ink', x + 16, y + 74, 16, 20);
-    rect('dusk', x + 17, y + 75, 14, 18);
-    rect(lit ? 'orange' : 'night', x + 20, y + 78, 1, 4);
-    rect(lit ? 'orange' : 'night', x + 27, y + 78, 1, 4);
-    rect('ink', x + 20, y + 87, 8, 3);
-    // 蹴込み
-    rect('ink', x, FLOOR_Y - 4, CAB_W, 4);
-
-    if (!lit) {
-      // 調整中の貼り紙
-      rect('cream', x - 1, y + 30, CAB_W + 2, 20);
-      rect('silver', x + 3, y + 29, 4, 2);
-      rect('silver', x + CAB_W - 7, y + 29, 4, 2);
-      RA.text(ctx, '調整中', x + CAB_W / 2, y + 31, { color: 'ink', align: 'center' });
-    }
+    drawStreet(ts, st, { era: '1996', door: open });
+    inside.draw(bctx, ts, { hud: false });
+    if (t < ZOOM) peek(opening(k));
+    else peek(Object.assign(street.doorGap(open), { dy: PEEK_Y }));
+    if (t >= ZOOM + DOOR_OPEN) go('street');
+    return t < ZOOM ? 0.7 + 0.3 * k : 0.7 * open;
   }
 
-  function drawArrowDown(x, y, color) {
-    ctx.fillStyle = P[color];
-    for (let i = 0; i < 4; i++) ctx.fillRect(x - 3 + i, y + i, 7 - i * 2, 1);
+  function drawLeave(ts, st) {
+    if (leaving.from === 'inside') inside.draw(ctx, ts, { hud: true });
+    else drawStreet(ts, st, { era: '1996', hud: true, ui: true });
+    // シャッターが下りるように暗転
+    const p = Math.min(1, (performance.now() - sceneAt) / LEAVE_TIME);
+    const h = Math.ceil(((H / 2) * p) / 4) * 4;
+    rect('ink', 0, 0, W, h);
+    rect('ink', 0, H - h, W, h);
   }
 
-  function drawSideArrow(x, y, dir, color) {
-    ctx.fillStyle = P[color];
-    for (let i = 0; i < 5; i++) {
-      const h = 9 - i * 2;
-      ctx.fillRect(dir < 0 ? x + 4 - i : x + i, y + i, 1, h); // 先端の列が1ドット
-    }
-  }
-
-  function drawSign(ts) {
-    // ときどき瞬くネオン
-    const r = ((Math.floor(ts / 70) * 2654435761) >>> 0) % 100;
-    const on = r >= 3;
-    RA.text(ctx, 'RETRO ARCADE', 128, 14, { font: 'en', size: 16, color: on ? 'pink' : 'dusk', outline: on ? 'maroon' : null, align: 'center' });
-    rect(on ? 'cyan' : 'dusk', 40, 34, 176, 1);
-    rect(on ? 'blue' : 'night', 40, 35, 176, 1);
-  }
-
-  function drawPanel(ts) {
-    rect('dusk', 2, PANEL_Y, W - 4, H - PANEL_Y - 2);
-    rect('ink', 3, PANEL_Y + 1, W - 6, H - PANEL_Y - 4);
-    const game = GAMES[sel];
-    if (!game) {
-      RA.text(ctx, '筐体がありません', 128, PANEL_Y + 11, { color: 'silver', align: 'center' });
-      return;
-    }
-    RA.text(ctx, game.title, 10, PANEL_Y + 2, { color: game.color || 'gold' });
-    if (Math.floor(ts / 400) % 2 === 0) RA.text(ctx, 'PLAY', 246, PANEL_Y + 6, { font: 'en', color: 'gold', align: 'right' });
-    if (game.desc) {
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(8, PANEL_Y + 20, W - 16, 18);
-      ctx.clip();
-      const tw = RA.textWidth(game.desc);
-      if (tw <= W - 20) {
-        RA.text(ctx, game.desc, 10, PANEL_Y + 20, { color: 'cream' });
-      } else {
-        const loop = tw + 32;
-        const off = Math.floor(ts / 40) % loop;
-        RA.text(ctx, game.desc, W - 8 - off, PANEL_Y + 20, { color: 'cream' });
-        RA.text(ctx, game.desc, W - 8 - off + loop, PANEL_Y + 20, { color: 'cream' });
-      }
-      ctx.restore();
-    }
-  }
-
-  function draw(ts) {
-    const dt = Math.min(0.1, (ts - lastTs) / 1000);
-    cam += (camTarget - cam) * Math.min(1, dt * 12);
-    if (Math.abs(camTarget - cam) < 0.5) cam = camTarget;
-    const camX = Math.round(cam);
-
-    ctx.drawImage(room, 0, 0);
-    for (let i = 0; i < SLOTS; i++) ctx.drawImage(cone, slotX(i) - camX + CAB_W / 2 - 38, 0);
-    drawSign(ts);
-    if (GAMES[sel]) ctx.drawImage(glow, slotX(sel) - camX + CAB_W / 2 - 36, FLOOR_Y);
-    for (let i = 0; i < SLOTS; i++) {
-      const x = slotX(i) - camX;
-      if (x > -CAB_W - 4 && x < W + 4) drawCabinet(i, x, ts);
-    }
-    if (GAMES[sel]) {
-      const bob = Math.floor(ts / 300) % 2;
-      drawArrowDown(slotX(sel) - camX + CAB_W / 2, 41 + bob, 'gold');
-    }
-    if (camX > 0) drawSideArrow(1, 96, -1, 'gold');
-    if (camX < MAX_CAM) drawSideArrow(W - 6, 96, 1, 'gold');
-
-    const hint = MOBILE ? 'TAP A CABINET TO PLAY' : '<- -> SELECT   ENTER PLAY';
-    RA.text(ctx, hint, 128, STRIP_Y + 3, { font: 'en', color: 'silver', align: 'center' });
-    drawPanel(ts);
-
-    if (leaving) {
-      // シャッターが下りるように暗転
-      const p = Math.min(1, (performance.now() - leaving.at) / LEAVE_TIME);
-      const h = Math.ceil((H / 2) * p / 4) * 4;
-      rect('ink', 0, 0, W, h);
-      rect('ink', 0, H - h, W, h);
-    }
+  function drawDebug() {
+    const rec = sky.record;
+    const s = 'T:' + (sky.debug.tod || 'AUTO') + ' W:' + (sky.debug.weather || 'AUTO') + ' ' + (rec ? rec.src.toUpperCase() : '-');
+    RA.text(ctx, s.toUpperCase(), 4, 26, { font: 'en', color: 'pink', outline: 'ink' });
   }
 
   // ===== 操作 =====
-  function select(i) {
-    if (i === sel || !GAMES[i]) return;
-    sel = i;
-    follow();
-    RA.sfx.blip();
+  function startSlip() {
+    go('slip');
+    sound.sfx.slip();
   }
 
-  function enter(i) {
-    const game = GAMES[i];
-    if (!game || leaving) return;
-    sel = i;
-    follow();
+  function startEnter() {
+    doorAt = 0;
+    go('enter');
+  }
+
+  function startExit() {
+    closing = false;
+    street.home(true);
+    go('exit');
+  }
+
+  function leaveTo(game, from) {
+    if (leaving) return;
     RA.Store.set(['top', 'last-game'], game.id);
+    RA.Store.set(RETURN_KEY, JSON.stringify({ scene: from, at: Date.now() }));
     RA.sfx.coin();
-    leaving = { at: performance.now(), url: urlOf(game) };
+    leaving = { url: 'games/' + game.id + '/index.html', from };
+    go('leave');
     setTimeout(() => {
-      location.href = leaving.url;
+      if (leaving) location.href = leaving.url;
     }, LEAVE_TIME);
   }
 
-  function slotAt(x, y) {
-    if (y < 38 || y >= FLOOR_Y) return -1;
-    const camX = Math.round(cam);
-    for (let i = 0; i < SLOTS; i++) {
-      const sx = slotX(i) - camX;
-      if (x >= sx - 3 && x < sx + CAB_W + 3) return i;
-    }
-    return -1;
+  function onStreet(a) {
+    if (!a) return;
+    if (a.type === 'enter') startEnter();
+    else if (a.type === 'poster') leaveTo(a.game, 'street');
+  }
+
+  function onInside(a) {
+    if (!a) return;
+    if (a.type === 'exit') startExit();
+    else if (a.type === 'game') leaveTo(a.game, 'inside');
+  }
+
+  // 巻き戻しの途中で押したら、すぐ着いたことにする
+  function skipSlip() {
+    const t = performance.now() - sceneAt;
+    if (t < ROLL) sceneAt = performance.now() - ROLL;
+  }
+
+  // 確認用（?debug=1）: T で時間帯、W で空模様を切り替える
+  function debugKey(code) {
+    const cycle = (list, v) => {
+      const i = list.indexOf(v);
+      return i + 1 < list.length ? list[i + 1] : null;
+    };
+    if (code === 'KeyT') sky.debug.tod = cycle(sky.TODS, sky.debug.tod);
+    else if (code === 'KeyW') sky.debug.weather = cycle(sky.WEATHERS, sky.debug.weather);
+    else return false;
+    RA.sfx.blip();
+    return true;
   }
 
   RA.bindInput(canvas, {
     press(ev) {
-      if (leaving) return;
-      if (ev.y >= 80 && ev.y < 120) {
-        if (ev.x < EDGE - 1 && Math.round(cam) > 0) return select(sel - 1);
-        if (ev.x >= W - EDGE + 1 && Math.round(cam) < MAX_CAM) return select(sel + 1);
-      }
-      if (ev.y >= PANEL_Y && ev.y < H && ev.x >= 0 && ev.x < W) return enter(sel);
-      const i = slotAt(ev.x, ev.y);
-      if (i < 0) return;
-      if (GAMES[i]) enter(i);
-      else RA.Audio.tone({ f: 140, dur: 0.12, vol: 0.12 }); // 調整中
+      const now = performance.now();
+      if (scene === 'title') startSlip();
+      else if (scene === 'slip') skipSlip();
+      else if (scene === 'street') onStreet(street.press(ev.x, ev.y, now));
+      else if (scene === 'inside') onInside(inside.press(ev.x, ev.y, now));
     },
     move(p) {
-      if (leaving) return;
-      const i = slotAt(p.x, p.y);
-      if (i >= 0 && GAMES[i]) select(i);
+      if (scene === 'street') street.move(p.x, p.y);
+      else if (scene === 'inside') inside.move(p.x, p.y);
     },
     key(ev) {
-      if (leaving) return;
-      if (ev.code === 'ArrowLeft') select(sel - 1);
-      else if (ev.code === 'ArrowRight') select(sel + 1);
-      else if (ev.code === 'Enter' || ev.code === 'Space') enter(sel);
+      if (DEBUG && debugKey(ev.code)) return;
+      const now = performance.now();
+      const ok = ev.code === 'Space' || ev.code === 'Enter';
+      if (scene === 'title' && ok) startSlip();
+      else if (scene === 'slip' && ok) skipSlip();
+      else if (scene === 'street') onStreet(street.key(ev.code, now));
+      else if (scene === 'inside') onInside(inside.key(ev.code, now));
     },
   });
 
-  // ブラウザの「戻る」でこのページに帰ってきたら、暗転を解く
+  // ブラウザの「戻る」でこのページに帰ってきたら、暗転を解いて出たところへ
   window.addEventListener('pageshow', (e) => {
-    if (e.persisted) leaving = null;
+    if (e.persisted && leaving) {
+      const from = leaving.from;
+      leaving = null;
+      go(from);
+    }
   });
 
-  const chars = GAMES.map((g) => g.title + (g.desc || '')).join('') + '調整中筐体がありません';
-  let ready = false;
-  RA.textReady(chars).then(() => {
-    ready = true;
-  });
+  // 字形が届き直したら、文字を焼き込んだ背景を描き直す
+  if (document.fonts && document.fonts.addEventListener) {
+    document.fonts.addEventListener('loadingdone', () => {
+      street.repaint();
+      inside.repaint();
+    });
+  }
 
   RA.loop((ts) => {
-    if (ready) {
-      draw(ts);
-    } else {
-      rect('ink', 0, 0, W, H);
-    }
+    const dt = Math.min(0.1, (ts - lastTs) / 1000);
     lastTs = ts;
+    sky.check();
+    if (scene === 'loading') {
+      rect('ink', 0, 0, W, H);
+      return;
+    }
+    const st = sky.state(Date.now());
+    street.update(dt);
+    inside.update(dt);
+    let mix = 0;
+    if (scene === 'title') drawTitle(ts, st);
+    else if (scene === 'slip') drawSlip(ts, st);
+    else if (scene === 'street') drawStreet(ts, st, { era: '1996', hud: true, ui: true });
+    else if (scene === 'enter') mix = drawEnter(ts, st);
+    else if (scene === 'inside') {
+      inside.draw(ctx, ts, { hud: true });
+      mix = 1;
+    } else if (scene === 'exit') mix = drawExit(ts, st);
+    else if (scene === 'leave') {
+      drawLeave(ts, st);
+      mix = leaving.from === 'inside' ? 1 : 0;
+    }
+    if (DEBUG) drawDebug();
+    const near = street.nearness();
+    sound.frame({ street: arrived ? 1 : 0, mix, door: near.door, sando: near.sando, day: st.tod !== 'night', sky: st });
   });
+
+  // ===== 読み込み =====
+  const CHARS = street.CHARS + inside.CHARS + 'まだ、光っていたころへ。タップで1996年へクリック／スペース年';
+  // 天気は待ちすぎない（届かなければ手元の記録か、季節なりの空で始め、届いたらそこから変わる）
+  const weatherReady = Promise.race([sky.check() || Promise.resolve(), new Promise((resolve) => setTimeout(resolve, 2500))]);
+  Promise.all([RA.textReady(CHARS), weatherReady]).then(() => go(back || 'title'));
 })();
