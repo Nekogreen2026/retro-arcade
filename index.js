@@ -4,11 +4,12 @@
  *   title  … 現在の大須。店はシャッターが下り、ネオンも消えている（最初のタップで音声を有効化）
  *   slip   … 年が1996年まで巻き戻り、店に灯りが戻る
  *   street … 画面1 街並み。壁のポスターからは、そのゲームへ直接入れる
+ *   talk   … 街のまま、ういろう屋のお姉さんと話す（名古屋っ子クイズ。plaza/ane.js）
  *   enter  … 画面2 入店。自動ドアが左右に開き、商店街の音が店内のゲーム音に入れ替わる
  *   inside … 画面3 店内。筐体からゲームへ入る。「外に出る」で exit を通って street へ
  *   leave  … ゲームへ入るときの暗転
  * ゲームから戻ってきたときは、出たところ（店内か街）から始まる（タイトルと巻き戻しは省く）。
- * 街・店内・空・音はそれぞれ plaza/ のファイルにあり、ここは場面の切り替えと入力をまとめる。
+ * 街・店内・空・音・お姉さんはそれぞれ plaza/ のファイルにあり、ここは場面の切り替えと入力をまとめる。
  */
 (function () {
   'use strict';
@@ -18,7 +19,7 @@
   const H = RA.H;
   const Plaza = window.Plaza;
   const { seeded, makeCanvas, ease, clamp, jstNow } = Plaza.kit;
-  const { street, inside, sky, sound } = Plaza;
+  const { street, inside, sky, sound, ane, quiz } = Plaza;
 
   const canvas = document.getElementById('screen');
   const ctx = RA.setupScreen(canvas);
@@ -259,6 +260,14 @@
     if (!a) return;
     if (a.type === 'enter') startEnter();
     else if (a.type === 'poster') leaveTo(a.game, 'street');
+    else if (a.type === 'ane') {
+      ane.open(performance.now());
+      go('talk');
+    }
+  }
+
+  function onTalk(r) {
+    if (r === 'close') go('street');
   }
 
   function onInside(a) {
@@ -273,7 +282,7 @@
     if (t < ROLL) sceneAt = performance.now() - ROLL;
   }
 
-  // 確認用（?debug=1）: T で時間帯、W で空模様を切り替える
+  // 確認用（?debug=1）: T で時間帯、W で空模様を切り替える。Q で今日のクイズの記録を消す
   function debugKey(code) {
     const cycle = (list, v) => {
       const i = list.indexOf(v);
@@ -281,6 +290,7 @@
     };
     if (code === 'KeyT') sky.debug.tod = cycle(sky.TODS, sky.debug.tod);
     else if (code === 'KeyW') sky.debug.weather = cycle(sky.WEATHERS, sky.debug.weather);
+    else if (code === 'KeyQ' && scene !== 'talk') quiz.reset();
     else return false;
     RA.sfx.blip();
     return true;
@@ -292,10 +302,12 @@
       if (scene === 'title') startSlip();
       else if (scene === 'slip') skipSlip();
       else if (scene === 'street') onStreet(street.press(ev.x, ev.y, now));
+      else if (scene === 'talk') onTalk(ane.press(ev.x, ev.y, now));
       else if (scene === 'inside') onInside(inside.press(ev.x, ev.y, now));
     },
     move(p) {
       if (scene === 'street') street.move(p.x, p.y);
+      else if (scene === 'talk') ane.move(p.x, p.y);
       else if (scene === 'inside') inside.move(p.x, p.y);
     },
     key(ev) {
@@ -305,6 +317,7 @@
       if (scene === 'title' && ok) startSlip();
       else if (scene === 'slip' && ok) skipSlip();
       else if (scene === 'street') onStreet(street.key(ev.code, now));
+      else if (scene === 'talk') onTalk(ane.key(ev.code, now));
       else if (scene === 'inside') onInside(inside.key(ev.code, now));
     },
   });
@@ -341,7 +354,10 @@
     if (scene === 'title') drawTitle(ts, st);
     else if (scene === 'slip') drawSlip(ts, st);
     else if (scene === 'street') drawStreet(ts, st, { era: '1996', hud: true, ui: true });
-    else if (scene === 'enter') mix = drawEnter(ts, st);
+    else if (scene === 'talk') {
+      drawStreet(ts, st, { era: '1996', hud: true, ui: true });
+      ane.draw(ctx, ts);
+    } else if (scene === 'enter') mix = drawEnter(ts, st);
     else if (scene === 'inside') {
       inside.draw(ctx, ts, { hud: true });
       mix = 1;
@@ -356,7 +372,7 @@
   });
 
   // ===== 読み込み =====
-  const CHARS = street.CHARS + inside.CHARS + 'まだ、光っていたころへ。タップで1996年へクリック／スペース年';
+  const CHARS = street.CHARS + inside.CHARS + ane.CHARS + 'まだ、光っていたころへ。タップで1996年へクリック／スペース年';
   // 天気は待ちすぎない（届かなければ手元の記録か、季節なりの空で始め、届いたらそこから変わる）
   const weatherReady = Promise.race([sky.check() || Promise.resolve(), new Promise((resolve) => setTimeout(resolve, 2500))]);
   Promise.all([RA.textReady(CHARS), weatherReady]).then(() => go(back || 'title'));

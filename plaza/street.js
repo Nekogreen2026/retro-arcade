@@ -2,7 +2,8 @@
  * にゃらゲームプラザ — 画面1 街並み（名古屋・大須）。
  * 左から 大須観音への参道／ういろう屋「巻き巻きういろー」／路地の公衆電話／にゃらゲームプラザ／
  * プリクラとガチャの軒先／アーケードの奥 が並ぶ。街は画面より広く、左右に見回せる（最初はプラザが真ん中）。
- * era が '1996' なら店は営業中、'now' なら現在（シャッターが下り、ネオンは消え、公衆電話もない）。
+ * ういろう屋の店先には、名古屋っ子クイズを出すお姉さん（plaza/ane.js）が立っている。
+ * era が '1996' なら店は営業中、'now' なら現在（シャッターが下り、ネオンは消え、公衆電話もお姉さんもいない）。
  * 建物は時間帯（昼・夕・夜）ごとに一度だけ描いて使い回し、看板の点滅や鳩などは毎フレーム重ねる。
  */
 (function () {
@@ -40,6 +41,7 @@
   const WINDOWS = [292, 368, 444]; // 2階の窓の左端（幅64）
   const BOOTH = { x: 254, y: 116, w: 24 }; // 公衆電話のボックス
   const PIGEON_AREA = { x: 24, y: 182, w: 76, h: 18 };
+  const ANE = { x: 205, foot: 206, w: 28, h: 62 }; // ういろう屋のお姉さん（足もとの中央と、押せる範囲の大きさ）
   const FAR_K = 0.4; // 遠くの街が動く割合
   const FAR_W = W + Math.ceil(MAX_CAM * FAR_K);
   const LED = { x: 292, y: 108, w: 216, h: 16 }; // 電光掲示板の文字の窓
@@ -55,7 +57,7 @@
   );
 
   const LED_TEXT =
-    'ようこそ にゃらゲームプラザへ ◆ 1PLAY 50円 ◆ ' + (GAMES.length ? GAMES.map((g) => g.title).join('・') + ' 好評稼働中 ◆ ' : '') + 'プリクラ・ガチャもあるよ ◆ ';
+    'ようこそ にゃらゲームプラザへ ◆ 1PLAY 0円 ◆ ' + (GAMES.length ? GAMES.map((g) => g.title).join('・') + ' 好評稼働中 ◆ ' : '') + 'プリクラ・ガチャもあるよ ◆ ';
 
   // ===== 状態 =====
   let cam = HOME;
@@ -798,6 +800,7 @@
       drawPanel(R, d, dx - shift, DOOR.y, DOOR.w / 2, DOOR.h, dx, dx + DOOR.w, st.lit);
       drawPanel(R, d, dx + DOOR.w / 2 + shift, DOOR.y, DOOR.w / 2, DOOR.h, dx, dx + DOOR.w, st.lit);
       if (BOOTH.x - c > -BOOTH.w && BOOTH.x - c < W) drawPhoneBooth(g, R, d, BOOTH.x - c, st);
+      if (ANE.x - c > -ANE.w && ANE.x - c < W + ANE.w) Plaza.ane.drawStreet(g, ANE.x - c, ANE.foot, ts);
       if (525 - c < W && 619 - c > 0) {
         g.save();
         g.translate(-c, 0);
@@ -908,7 +911,7 @@
   }
 
   /*
-   * 押したところに応じて { type: 'enter' } / { type: 'poster', game } / null を返す。
+   * 押したところに応じて { type: 'enter' } / { type: 'poster', game } / { type: 'ane' }（お姉さん）/ null を返す。
    * 鳩や公衆電話のような、その場で済むものはここで鳴らして null を返す
    */
   function press(x, y, now) {
@@ -936,6 +939,7 @@
       return { type: 'poster', game: POSTER_GAMES[i] };
     }
     if (wx >= DOOR.x - 4 && wx < DOOR.x + DOOR.w + 4 && y >= 128 && y < GROUND) return { type: 'enter' };
+    if (Math.abs(wx - ANE.x) <= ANE.w / 2 && y >= ANE.foot - ANE.h && y < ANE.foot + 4) return { type: 'ane' };
     if (wx >= BOOTH.x && wx < BOOTH.x + BOOTH.w && y >= BOOTH.y && y < GROUND) {
       if (now - phoneAt > 1600) {
         phoneAt = now;
@@ -966,6 +970,9 @@
     } else if (code === 'Enter' || code === 'Space') {
       enterBtn.flash(now);
       return { type: 'enter' };
+    } else if (code === 'KeyU') {
+      camTarget = clamp(ANE.x - W / 2, 0, MAX_CAM);
+      return { type: 'ane' };
     } else if (code === 'Digit1' || code === 'Digit2') {
       const i = code === 'Digit1' ? 0 : 1;
       if (!POSTER_GAMES[i]) return null;

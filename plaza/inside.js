@@ -124,7 +124,7 @@
     }
     // 天井灯から落ちる光（ディザで薄く）
     ITEMS.forEach((it) => cone(g, R, it.x + it.w / 2));
-    // 天井から吊った「1PLAY 50円」
+    // 天井から吊った「1PLAY 0円」
     for (let i = 0; i + 1 < SLOTS; i += 2) pop(g, R, slotX(i) + CAB_W + (PITCH - CAB_W) / 2);
     paintUfo(g, R);
     paintCalendar(g, R, t);
@@ -153,7 +153,7 @@
     R('gold', x + 1, 21, 44, 27);
     R('red', x + 1, 21, 44, 10);
     RA.text(g, '1PLAY', cx, 22, { font: 'en', color: 'cream', align: 'center' });
-    RA.text(g, '50円', cx, 30, { color: 'red', align: 'center' });
+    RA.text(g, '0円', cx, 30, { color: 'red', align: 'center' });
   }
 
   // 景品のぬいぐるみ（猫ときのこ）
