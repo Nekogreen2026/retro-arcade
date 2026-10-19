@@ -23,7 +23,7 @@
 ```
 index.html / index.js   トップページ（1996年・大須のゲーセン「にゃらゲームプラザ」。街並み→入店→店内）
 games.js                筐体の一覧（1行＝1台）
-plaza/                  トップページだけの部品（名前空間 Plaza。街並み・店内・空・音）
+plaza/                  トップページだけの部品（名前空間 Plaza。街並み・店内・空・音・ういろう屋のお姉さんとクイズ）
 shared/                 全ゲーム共通の部品（名前空間 RA）
   palette.js            16色パレット（RA.P.名前 で色を取る）
   base.css              画面の配置・ジェスチャー無効化
@@ -33,7 +33,9 @@ shared/                 全ゲーム共通の部品（名前空間 RA）
   audio.js              Web Audioの効果音合成・音声の有効化
   ui.js                 ボタン、トップへ戻る
   store.js              localStorage（キーの形式を強制）
+  fertilizer.js         ういろう肥料の所持数（RA.Fertilizer。トップページのクイズでもらい、菌糸ライフで使う）
   weather.js            名古屋の季節と天気（RA.Weather。菌糸ライフとトップページで共通）
+assets/chara/           複数のページで使うキャラクターの絵（<キャラID>-<表情>.png。一覧は README）
 games/<ゲーム名>/       1ゲーム＝1フォルダ（index.html が入口）
 ```
 
@@ -49,4 +51,4 @@ games/<ゲーム名>/       1ゲーム＝1フォルダ（index.html が入口）
   `RA.withActivation()` を通して呼ぶ（タッチの `pointerdown` はブラウザ仕様上その有効化にならないため、同じ指の `pointerup` で実行される）
 - 保存は `RA.Store` を通す（キーの形式を自動で守る）
 - ゲームからトップへ戻るリンクは `../../index.html`（`RA.goTop()`）
-- 画像などの素材は各ゲームの `assets/` に置き、相対パスで読む
+- 画像などの素材は各ゲームの `assets/` に置き、相対パスで読む。複数のページで使うキャラクターの絵だけは `assets/chara/` に置く

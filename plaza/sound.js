@@ -417,6 +417,30 @@
       tone(N.sfx, { f: 1760, dur: 0.06, vol: 0.05, at: 0.6 });
       hiss(N.sfx, { dur: 0.05, vol: 0.18, filter: 'highpass', f: 3000, at: 0.62 });
     },
+    // ういろう屋のお姉さんのおしゃべり（字が出るたびの小さな声）
+    voice() {
+      if (!ensure()) return;
+      tone(N.sfx, { f: 1050 + Math.random() * 350, dur: 0.035, type: 'square', vol: 0.025 });
+    },
+    // クイズの正解（ピンポーン）
+    right() {
+      if (!ensure()) return;
+      tone(N.sfx, { f: 1319, dur: 0.2, type: 'square', vol: 0.05 });
+      tone(N.sfx, { f: 1047, dur: 0.6, type: 'square', vol: 0.05, at: 0.2 });
+    },
+    // クイズの不正解（ブブー）
+    wrong() {
+      if (!ensure()) return;
+      tone(N.sfx, { f: 147, dur: 0.22, type: 'sawtooth', vol: 0.07 });
+      tone(N.sfx, { f: 147, dur: 0.45, type: 'sawtooth', vol: 0.07, at: 0.28 });
+    },
+    // ういろう肥料をもらった（小さなファンファーレ）
+    gift() {
+      if (!ensure()) return;
+      [784, 988, 1175].forEach((f, k) => tone(N.sfx, { f, dur: 0.09, type: 'square', vol: 0.045, at: k * 0.1 }));
+      tone(N.sfx, { f: 1568, dur: 0.5, type: 'square', vol: 0.045, at: 0.3 });
+      tone(N.sfx, { f: 784, dur: 0.5, type: 'triangle', vol: 0.06, at: 0.3 });
+    },
     // 遠くの雷
     thunder() {
       if (!ensure()) return;

@@ -7,6 +7,7 @@
  * 変種は「胞子と幼菌のあいだ、どの環境にどれだけいたか」で決まる。条件は画面には出さない。
  * ケースの湿度・温度は、つまみに季節（現実の日付）と名古屋の実際の気温・湿度が少し加わったものになる。
  * 名古屋に台風・猛暑・長雨・初霜が来ているあいだは、それぞれ特別な変種が出やすくなる（天気は shared/weather.js）。
+ * トップページのういろう屋のクイズでもらう「ういろう肥料」を育ち途中の鉢に使うと、その株はレアな変種になりやすい。
  * 時間は実時間で進む。閉じていたあいだの分は、開いたときに前回の時刻からまとめて進める。
  * URL に ?debug=1 を付けたときだけ、早送りと、季節・天候を切り替えるボタンを出す。
  */
@@ -48,6 +49,10 @@
   const EVENT_ODDS = [0.6, 0.25]; // 天候イベントの中だけで育った鉢が、その変種になる確率（未発見・発見済み）
   const WILD_RATE = 0.7; // 台風のあいだ、空き鉢1つに1時間あたり胞子が飛んでくる回数の見込み
   const WEATHER_WAIT = 4000; // 開いたとき、留守の分を進める前に天気の取得を待つ上限（ミリ秒）
+  // ういろう肥料（所持数はトップページと共通。shared/fertilizer.js）。レア＝季節限定と天候イベントの変種（図鑑の2ページ目）
+  const FERT_BOOST = 3; // 肥料を使った株の、レアの出やすさの倍率（天候イベントの変種のくじと、下の FERT_LUCK に掛ける。確率は1まで）
+  const FERT_LUCK = 0.05; // 肥料を使った株が、条件に関係なく「成菌になったときの季節」の季節限定になる確率のもと（× FERT_BOOST）
+  const LUCK_SALT = 8; // 肥料のくじに使う、鉢ごとのくじの番号（0〜3 は天候イベントのくじ）
 
   const HUM = 0;
   const TEMP = 1;
@@ -139,6 +144,8 @@
 
   const newSeed = () => Math.floor(Math.random() * 4294967296) >>> 0;
 
+  const isRare = (id) => !!(BY_ID[id].season || BY_ID[id].event);
+
   /*
    * 変種を決める。pot.exp[つまみ][段階] は、胞子・幼菌のあいだにその段階にいた時間（季節と天気を足した実際の状態で数える）。
    * pot.ev[イベント] は、そのあいだ天候イベントの中にいた時間。cond はそのときの季節と天気、eff はそのときの状態。
@@ -146,15 +153,25 @@
    * ここが出現条件のすべて。ゲーム内では見せない（README の「ネタバレ」に同じ表がある）。
    */
   function decide(pot, eff, cond) {
+    const id = byCondition(pot, eff, cond);
+    if (!pot.fert || isRare(id)) return id;
+    // ういろう肥料のまぐれ。鉢ごとのくじで、そのときの季節の季節限定になる
+    const lucky = VARIANTS.find((v) => v.season === SEASONS[cond.season].id);
+    return lucky && roll(pot.seed, LUCK_SALT) < Math.min(1, FERT_LUCK * FERT_BOOST) ? lucky.id : id;
+  }
+
+  function byCondition(pot, eff, cond) {
     if (pot.wild) return pot.wild; // 台風で飛んできた胞子は、何になるか決まっている
     const exp = pot.exp;
     const total = exp[HUM][0] + exp[HUM][1] + exp[HUM][2];
-    // 天候イベントの変種。イベントの中で育った割合に応じた確率で、鉢ごとのくじで決まる（ノワキダケは飛んでくる胞子からだけ）
+    // 天候イベントの変種。イベントの中で育った割合に応じた確率で、鉢ごとのくじで決まる（ノワキダケは飛んでくる胞子からだけ）。
+    // ういろう肥料を使った株は、その確率が FERT_BOOST 倍
+    const boost = pot.fert ? FERT_BOOST : 1;
     for (const v of VARIANTS) {
       const k = EV[v.event];
       if (k == null || k === EV.typhoon) continue;
       const share = total > 0 ? pot.ev[k] / total : cond.events[k] ? 1 : 0;
-      if (roll(pot.seed, k) < share * EVENT_ODDS[isFound(book[v.id]) ? 1 : 0]) return v.id;
+      if (roll(pot.seed, k) < share * Math.min(1, EVENT_ODDS[isFound(book[v.id]) ? 1 : 0] * boost)) return v.id;
     }
     const share = (k, lv) => (total > 0 ? exp[k][lv] / total : split(eff[k])[lv]);
     if (share(TEMP, 0) >= SWING && share(TEMP, 2) >= SWING) return 'twotone'; // 寒暖差
@@ -184,7 +201,7 @@
   // ===== 保存 =====
   // state: { last: 最後に時間を進めた時刻(ms), env: [湿度, 温度, 光], pots: [鉢 or null, ...] }
   //   鉢: { stage, prog: その段階の進み(0〜1), exp: 育つあいだの環境の記録, ev: 育つあいだ各イベントの中にいた時間,
-  //         seed: 鉢ごとのくじの種, wild: 台風で飛んできた胞子の変種 or null, variant: 成菌で決まる変種 }
+  //         seed: 鉢ごとのくじの種, wild: 台風で飛んできた胞子の変種 or null, fert: ういろう肥料を使ったか, variant: 成菌で決まる変種 }
   // book: { 変種ID: { h: 採取した数, d: 乾燥標本の数, n: 図鑑で未確認の新着, s: 見つけた季節, w: 見つけた天候 } }
   //   s・w はビットの集まり（並びは SEASONS・WEATHERS）。前の版の記録には無いので 0 から始まる
   const KEY_STATE = ['kinshi', 'state'];
@@ -216,6 +233,7 @@
       ev: Array.isArray(p.ev) && p.ev.length === EVENTS.length && p.ev.every(isTime) ? p.ev.slice() : EVENTS.map(() => 0),
       seed: Number.isInteger(p.seed) && p.seed >= 0 ? p.seed >>> 0 : newSeed(),
       wild: growing && BY_ID[p.wild] ? p.wild : null,
+      fert: growing && p.fert === true,
       variant: growing ? null : p.variant,
     };
   }
@@ -348,6 +366,7 @@
       ev: EVENTS.map(() => 0),
       seed: newSeed(),
       wild: null,
+      fert: false,
       variant: null,
     };
   }
@@ -581,6 +600,12 @@
     // 遠くで鳴る雷
     thunder() {
       A.noise({ dur: 1.6, vol: 0.3, filter: 'lowpass', f: 500, f2: 70, attack: 0.02, at: 0.3 + Math.random() * 0.6 });
+    },
+    // ういろう肥料をまく「サラサラ、キラン」
+    feed() {
+      A.noise({ dur: 0.3, vol: 0.16, filter: 'highpass', f: 3000, attack: 0.05 });
+      A.tone({ f: 1568, dur: 0.1, type: 'triangle', vol: 0.1, at: 0.25 });
+      A.tone({ f: 2093, dur: 0.25, type: 'triangle', vol: 0.1, at: 0.33 });
     },
   };
 
@@ -1028,13 +1053,16 @@
   let bookNew = new Set(); // 今回図鑑を開いたときの新着
   let focus = 0; // キーボードで選んでいる操作
   let kbd = false; // キーボードで操作中（選択枠を出す）
+  let picking = false; // ういろう肥料を使う鉢を選んでいるところ
   let heard = -1; // 最後に知らせた天候イベント（EVENTS の番号、なしは -1）
   let thunderAt = -1; // 最後に雷を鳴らした稲光の番号
 
   const backBtn = RA.backButton();
   const bookBtn = new RA.Button({ x: 188, y: 4, w: 64, h: 20, label: '図鑑' });
-  const hourBtn = new RA.Button({ x: 72, y: 4, w: 54, h: 20, label: '+1時間' });
-  const dayBtn = new RA.Button({ x: 130, y: 4, w: 54, h: 20, label: '+1日' });
+  const FEED_PLATE = { x: 72, y: 4, w: 58, h: 20 }; // ういろう肥料の所持数
+  const feedBtn = new RA.Button({ x: 134, y: 4, w: 50, h: 20, label: '使う' });
+  const hourBtn = new RA.Button({ x: 4, y: 24, w: 54, h: 18, label: '+1時間' });
+  const dayBtn = new RA.Button({ x: 62, y: 24, w: 54, h: 18, label: '+1日' });
   const seasonBtn = new RA.Button({ x: 162, y: 24, w: 44, h: 18, label: '' });
   const eventBtn = new RA.Button({ x: 208, y: 24, w: 44, h: 18, label: '' });
   const prevBtn = new RA.Button({ x: 188, y: 4, w: 30, h: 20, label: '前' });
@@ -1134,6 +1162,53 @@
     save();
   }
 
+  // ===== ういろう肥料 =====
+  // 使えるのは、まだ変種が決まっていない（胞子・幼菌の）鉢に1回ずつ
+  const canFeed = (pot) => !!pot && (pot.stage === 'spore' || pot.stage === 'young') && !pot.fert;
+  const NO_FERT = 'ういろう屋のクイズでもらえる';
+
+  // 「使う」を押した。使う鉢を選ぶところへ（選んでいる途中なら、やめる）
+  function startFeed() {
+    sync();
+    if (picking) {
+      picking = false;
+      RA.sfx.blip();
+      return;
+    }
+    if (!RA.Fertilizer.count()) {
+      say(NO_FERT, 'silver');
+      return snd.limit();
+    }
+    if (!state.pots.some(canFeed)) {
+      say('胞子か幼菌の鉢に使える', 'silver');
+      return snd.limit();
+    }
+    picking = true;
+    toast = null;
+    RA.sfx.blip();
+    if (kbd) focus = MAIN_CONTROLS.findIndex((c) => c.pot != null && canFeed(state.pots[c.pot]));
+  }
+
+  // 鉢 i に肥料を使う
+  function feed(i, t) {
+    picking = false;
+    sync();
+    const pot = state.pots[i];
+    if (!canFeed(pot)) {
+      say(pot && pot.fert ? '肥料はもう効いている' : '胞子か幼菌の鉢に使える', 'silver');
+      return snd.limit();
+    }
+    if (!RA.Fertilizer.take()) {
+      say(NO_FERT, 'silver');
+      return snd.limit();
+    }
+    pot.fert = true;
+    effects.push({ kind: 'feed', cx: POT_X[i], at: t });
+    snd.feed();
+    say('肥料でレアが出やすくなった', 'gold');
+    save();
+  }
+
   function turn(k, d) {
     sync(); // 変える前の環境で、ここまでの時間を進めておく
     const lv = state.env[k] + d;
@@ -1193,6 +1268,7 @@
 
   function openBook() {
     sync();
+    picking = false;
     bookNew = new Set(VARIANTS.filter((v) => book[v.id].n).map((v) => v.id));
     if (bookNew.size) {
       bookSel = VARIANTS.findIndex((v) => bookNew.has(v.id));
@@ -1241,14 +1317,16 @@
     };
   }
 
-  const POT_ROW = DEBUG ? 2 : 1; // デバッグのときは、上に季節・天候のボタンの段が入る
+  const POT_ROW = DEBUG ? 2 : 1; // デバッグのときは、上に早送り・季節・天候のボタンの段が入る
   const BOOK_CONTROL = control(bookBtn, 0, openBook);
+  const FEED_CONTROL = control(feedBtn, 0, startFeed);
   const MAIN_CONTROLS = [
     control(backBtn, 0, RA.goTop),
-    ...(DEBUG ? [control(hourBtn, 0, () => skip(1)), control(dayBtn, 0, () => skip(24))] : []),
+    FEED_CONTROL,
     BOOK_CONTROL,
-    ...(DEBUG ? [control(seasonBtn, 1, cycleSeason), control(eventBtn, 1, cycleEvent)] : []),
-    ...POT_X.map((cx, i) => ({ x: cx - 36, y: CASE.y + 8, w: 72, h: CASE.h - 8, row: POT_ROW, act: (t) => tapPot(i, t) })),
+    ...(DEBUG ? [control(hourBtn, 1, () => skip(1)), control(dayBtn, 1, () => skip(24)), control(seasonBtn, 1, cycleSeason), control(eventBtn, 1, cycleEvent)] : []),
+    // 肥料を使う鉢を選んでいるあいだは、鉢を押すとその鉢に使う
+    ...POT_X.map((cx, i) => ({ x: cx - 36, y: CASE.y + 8, w: 72, h: CASE.h - 8, row: POT_ROW, pot: i, act: (t) => (picking ? feed(i, t) : tapPot(i, t)) })),
     ...dialBtns.flatMap(([minus, plus], k) => [control(minus, POT_ROW + 1, () => turn(k, -1)), control(plus, POT_ROW + 1, () => turn(k, 1))]),
   ];
 
@@ -1327,10 +1405,13 @@
     const list = controls();
     if (!list) return;
     const i = list.findIndex((c) => ev.x >= c.x && ev.x < c.x + c.w && ev.y >= c.y && ev.y < c.y + c.h);
+    if (picking && (i < 0 || isOther(list[i]))) picking = false; // 鉢と「使う」以外を押したら、選ぶのをやめる
     if (i < 0) return;
     focus = i;
     list[i].act(ev.t);
   }
+
+  const isOther = (c) => c.pot == null && c !== FEED_CONTROL;
 
   const ARROWS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
 
@@ -1356,16 +1437,26 @@
     }
     if (ok) {
       kbd = true;
+      if (picking && isOther(list[focus])) picking = false;
       return list[focus].act(ev.t);
     }
     if (scene === 'book') {
       if (back || c === 'KeyZ') closeBook();
       return;
     }
+    const n = ['Digit1', 'Digit2', 'Digit3'].indexOf(c);
+    if (picking) {
+      if (n >= 0) return feed(n, ev.t);
+      if (back || c === 'KeyU') return startFeed(); // 選ぶのをやめる
+    }
     if (back) return RA.goTop();
     if (c === 'KeyZ') return openBook();
-    const n = ['Digit1', 'Digit2', 'Digit3'].indexOf(c);
+    if (c === 'KeyU') return FEED_CONTROL.act(ev.t);
     if (n >= 0) return tapPot(n, ev.t);
+    if (DEBUG && c === 'KeyF') {
+      say('肥料 ' + RA.Fertilizer.add(1) + '個', 'pink');
+      return RA.sfx.blip();
+    }
     if (DEBUG && c === 'KeyH') return skip(1);
     if (DEBUG && c === 'KeyD') return skip(24);
     if (DEBUG && c === 'KeyS') return cycleSeason();
@@ -1703,6 +1794,8 @@
     const pot = state.pots[i];
     if (!pot) return;
     drawIn(img[shownVariant(pot)][pot.stage], cx - BOX / 2, BED_Y + 2 - BOX, BOX);
+    // ういろう肥料が効いている（変種が決まるまで、菌床の脇に袋を置いておく）
+    if (pot.fert && (pot.stage === 'spore' || pot.stage === 'young')) RA.Fertilizer.icon(ctx, cx + 22, BED_Y - 4);
     const g = gaugeOf(pot);
     if (g) {
       rect('ink', cx - 21, BED_Y + 4, 42, 4);
@@ -1734,6 +1827,13 @@
           const y = BED_Y - 44 + ((k * 5) % 9) + Math.round(p * 42);
           if (y < BED_Y) rect(k % 2 ? 'cyan' : 'cream', f.cx - 70 + Math.round(p * 56) + k * 4, y, 1, 1);
         }
+      } else if (f.kind === 'feed') {
+        // 肥料の袋が降りてきて、粒が菌床にまかれる
+        if (el < 300) RA.Fertilizer.icon(ctx, f.cx - 6, BED_Y - 64 + Math.round(el / 12));
+        for (let k = 0; k < 9; k++) {
+          const y = BED_Y - 36 + ((k * 11) % 13) + Math.round((el / 600) * 36);
+          if (el > 200 && y < BED_Y) rect(['pink', 'cream', 'white'][k % 3], f.cx - 16 + k * 4, y, 1, 1);
+        }
       } else if (f.kind === 'stars') {
         const r = 12 + el * 0.06;
         for (let k = 0; k < 8; k++) {
@@ -1747,7 +1847,10 @@
   function drawMessage(ts) {
     let text = null;
     let color = 'silver';
-    if (toast && performance.now() < toast.until) {
+    if (picking) {
+      if (Math.floor(ts / 500) % 3 < 2) text = 'どの鉢に使う？';
+      color = 'gold';
+    } else if (toast && performance.now() < toast.until) {
       text = toast.text;
       color = toast.color;
     } else if (!state.pots.some(Boolean)) {
@@ -1776,12 +1879,28 @@
     dialBtns[k][1].draw(ctx, ts);
   }
 
+  // ういろう肥料の所持数と「使う」ボタン（使う鉢を選んでいるあいだは赤）
+  function drawFeed(ts) {
+    const n = RA.Fertilizer.count();
+    const { x, y, w, h } = FEED_PLATE;
+    rect('dusk', x, y, w, h);
+    rect('ink', x + 1, y + 1, w - 2, h - 2);
+    RA.text(ctx, '肥料', x + 4, y + 2, { color: 'cream' });
+    RA.text(ctx, String(n), x + w - 4, y + 2, { color: n ? 'gold' : 'mist', align: 'right' });
+    feedBtn.tone = picking ? 'primary' : 'normal';
+    feedBtn.draw(ctx, ts);
+  }
+
   function drawMain(ts) {
     rect('ink', 0, 0, W, H);
     drawSky(ts);
     drawCase(ts);
     for (let i = 0; i < POTS; i++) drawPot(i, ts);
     drawEffects(ts);
+    // 肥料を使える鉢を点滅で示す
+    if (picking && Math.floor(ts / 300) % 3 < 2) {
+      state.pots.forEach((pot, i) => canFeed(pot) && frame('gold', POT_X[i] - 36, CASE.y + 8, 72, CASE.h - 8));
+    }
     state.pots.forEach((pot, i) => {
       const label = pot ? STAGE_NAME[pot.stage] : '空き';
       RA.text(ctx, label, POT_X[i], LABEL_Y, { color: pot ? STAGE_COLOR[pot.stage] : 'mist', align: 'center', outline: 'ink' });
@@ -1790,8 +1909,9 @@
     backBtn.draw(ctx, ts);
     bookBtn.draw(ctx, ts);
     if (VARIANTS.some((v) => book[v.id].n) && Math.floor(ts / 400) % 2 === 0) rect('pink', bookBtn.x + bookBtn.w - 7, bookBtn.y + 3, 3, 3);
-    drawReadout(5, READ_Y, 'left', true);
+    drawFeed(ts);
     if (DEBUG) {
+      // デバッグのときは、名古屋の天気の札の代わりに早送りのボタン（天気の中身はタイトルに出る）
       hourBtn.draw(ctx, ts);
       dayBtn.draw(ctx, ts);
       const ev = EVENTS[topEvent(world)];
@@ -1802,6 +1922,7 @@
       seasonBtn.draw(ctx, ts);
       eventBtn.draw(ctx, ts);
     } else {
+      drawReadout(5, READ_Y, 'left', true);
       drawTags(W - 6, READ_Y, true);
     }
     for (let k = 0; k < 3; k++) drawDial(k, ts);
@@ -1943,7 +2064,7 @@
       weatherLines().forEach((s, k) => RA.text(ctx, s, 128, 218 + k * 11, { font: 'en', color: 'pink', align: 'center' }));
     } else if (!MOBILE) {
       RA.text(ctx, 'ARROWS+SPACE:SELECT  ESC:TOP', 128, 220, { font: 'en', color: 'mist', align: 'center' });
-      RA.text(ctx, '1-3:POTS  Z:BOOK', 128, 230, { font: 'en', color: 'mist', align: 'center' });
+      RA.text(ctx, '1-3:POTS  Z:BOOK  U:FERT', 128, 230, { font: 'en', color: 'mist', align: 'center' });
     }
   }
 
@@ -2019,6 +2140,7 @@
     'よみこちゅう絵を読み込めませんでした直す' +
     '名古屋°C%-前次飛来胞子が飛んできた！が去ったにだけ出るらしい。台風に乗ってくるらしい。の日に' +
     '季節日付どおり（）に固定天候実際の天気なし' +
+    '肥料使うどの鉢に使う？でレアが出やすくなったういろう屋のクイズでもらえる胞子か幼菌の鉢に使える肥料はもう効いている個' +
     SEASONS.map((s) => s.name).join('') +
     WEATHERS.map((w) => w.name + (w.hello || '')).join('') +
     VARIANTS.map((v) => v.name + v.text.join('')).join('');
