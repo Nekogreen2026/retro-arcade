@@ -1,12 +1,12 @@
 /*
- * 菌糸ライフ — 名古屋の季節と天気。
+ * 名古屋の季節と天気（菌糸ライフと、トップページの空で共通）。
  *
  * 季節は現実の日付（日本時間）で決まる。天気は Open-Meteo（APIキー不要）から名古屋の値を取る。
  *   いま   … 気温・湿度・降水量・風速・最大瞬間風速（風速は m/s）
  *   日ごと … 過去3日と今日の、降水量と最低気温
  * 取得は1時間に1回まで（失敗も1回に数える）。結果は localStorage に置き、開くたびには取りに行かない。
  * 取れなかったときは、季節なりのランダムな天気で代用する（src が 'fallback' になる）。
- * ここは「天気から天候イベントを判定する」までを受け持つ。ゲームへの効き方は game.js で決める。
+ * ここは「天気から天候イベントを判定する」までを受け持つ。ゲームへの効き方・空の見せ方は使う側で決める。
  */
 (function () {
   'use strict';
@@ -18,6 +18,7 @@
   const FETCH_EVERY = HOUR; // 取得は1時間に1回まで
   const VALID = 3 * HOUR; // 「いま」の値を、取得の時刻からこの長さだけ有効とみなす
   const TIMEOUT = 8000;
+  // 菌糸ライフで使ってきたキーをそのまま使う（前からの記録を引き継ぎ、取得の回数もサイト全体で1時間に1回にまとめる）
   const KEY = ['kinshi', 'weather'];
 
   // 名古屋（緯度35.18, 経度136.91）
@@ -221,5 +222,5 @@
     };
   }
 
-  window.KinshiWeather = { SEASONS, NORMAL, VALID, jst, shiftDate, seasonAt, nextMidnight, load, due, update, parse, fallback, dayEvents, nowEvents };
+  RA.Weather = { SEASONS, NORMAL, VALID, jst, shiftDate, seasonAt, nextMidnight, load, due, update, parse, fallback, dayEvents, nowEvents };
 })();
