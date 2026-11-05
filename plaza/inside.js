@@ -41,7 +41,7 @@
       return { kind: 'empty', i, x: slotX(i), w: CAB_W, top: CAB_TOP, title: '調整中', desc: '新しい台が入る予定。', color: 'silver' };
     }),
     { kind: 'changer', x: CHANGER.x, w: CHANGER.w, top: 88, title: '両替機', desc: '千円札を百円玉にくずせる。', color: 'gold' },
-    { kind: 'photo', x: PHOTO.x, w: PHOTO.w, top: 36, title: 'ぷりにゃん', desc: '撮って貼れる、写真のシール。', color: 'pink' },
+    { kind: 'photo', x: PHOTO.x, w: PHOTO.w, top: 36, title: 'ぷりにゃん', desc: '1996年の色で撮れるシール。', color: 'pink' },
   ];
 
   // ===== 状態 =====
@@ -524,6 +524,7 @@
     sel = i;
     follow();
     if (it.kind === 'game') return { type: 'game', game: it.game };
+    if (it.kind === 'photo') return { type: 'game', game: { id: 'purinyan' } }; // プリクラ機「ぷりにゃん」（games/purinyan）
     if (it.kind === 'empty') RA.Audio.tone({ f: 140, dur: 0.12, vol: 0.12 });
     else if (it.kind === 'ufo') {
       if (now - clawAt > 2600) {
