@@ -68,8 +68,8 @@
   let pigeonsFlyAt = -1e9;
   let phoneAt = -1e9;
 
-  const leftBtn = new RA.Button({ x: 4, y: VIEW_H + 2, w: 34, h: 22, label: '' });
-  const rightBtn = new RA.Button({ x: W - 38, y: VIEW_H + 2, w: 34, h: 22, label: '' });
+  const leftBtn = new RA.Button({ x: 4, y: VIEW_H + 2, w: 76, h: 22, label: '' }); // スマホで押しやすい幅
+  const rightBtn = new RA.Button({ x: W - 80, y: VIEW_H + 2, w: 76, h: 22, label: '' });
   const enterBtn = new RA.Button({ x: 88, y: VIEW_H + 2, w: 80, h: 22, label: '入店', tone: 'primary' });
 
   // ===== 建物（時間帯ごとに一度だけ描く） =====
@@ -861,8 +861,8 @@
     rightBtn.draw(g, ts);
     enterBtn.draw(g, ts);
     const c = Math.round(cam);
-    arrow(g, leftBtn.x + 14, leftBtn.y + 7, -1, c > 0 ? 'cream' : 'mist');
-    arrow(g, rightBtn.x + 16, rightBtn.y + 7, 1, c < MAX_CAM ? 'cream' : 'mist');
+    arrow(g, leftBtn.x + Math.round(leftBtn.w / 2) - 3, leftBtn.y + 7, -1, c > 0 ? 'cream' : 'mist');
+    arrow(g, rightBtn.x + Math.round(rightBtn.w / 2) - 3, rightBtn.y + 7, 1, c < MAX_CAM ? 'cream' : 'mist');
     if (!MOBILE) {
       RA.text(g, '<- ->', 62, VIEW_H + 10, { font: 'en', color: 'mist', align: 'center' });
       RA.text(g, 'ENTER', 194, VIEW_H + 10, { font: 'en', color: 'mist', align: 'center' });
@@ -941,8 +941,8 @@
     if (wx >= DOOR.x - 4 && wx < DOOR.x + DOOR.w + 4 && y >= 128 && y < GROUND) return { type: 'enter' };
     if (Math.abs(wx - ANE.x) <= ANE.w / 2 && y >= ANE.foot - ANE.h && y < ANE.foot + 4) return { type: 'ane' };
     // ういろう屋の陳列ケース → 厨房のミニゲーム「巻き巻きういろう」
-    const uiroGame = GAMES.find((g) => g.id === 'uiro');
-    if (uiroGame && wx >= 150 && wx < 210 && y >= 170 && y < 200) return { type: 'poster', game: uiroGame };
+    const uiroGame = { id: 'uiro' }; // 筐体の一覧には載せず、ういろう屋だけで遊べる
+    if (wx >= 150 && wx < 210 && y >= 170 && y < 200) return { type: 'poster', game: uiroGame };
     if (wx >= BOOTH.x && wx < BOOTH.x + BOOTH.w && y >= BOOTH.y && y < GROUND) {
       if (now - phoneAt > 1600) {
         phoneAt = now;
