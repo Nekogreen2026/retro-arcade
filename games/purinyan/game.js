@@ -3,7 +3,7 @@
  *
  * 本物のカメラで撮った写真を、店の16色パレットのドット絵に変換してシールにする。
  *   フレーム … 猫天使／きのこ／ういろう から選ぶ
- *   あの子   … 灰色の髪のツインテールで、白い楕円のサングラスの女の子。名前はわからない（N…？）
+ *   あの子   … ライトブラウンのツインテール、白い楕円のサングラス、右の頭に黒い角。名前はわからない（N…？）
  * カメラが使えない端末では、猫のぬいぐるみが代わりに写る。
  * 撮ったシールは画像として保存できる。
  */
@@ -269,34 +269,61 @@
     [-62, 56].forEach((dx, k) => heart(g, sx + STICKER.w / 2 + dx, py + PHOTO.h + 9 + ((k + bob) % 2), 'red'));
   }
 
-  // ===== あの子（灰色のツインテール、白い楕円のサングラス） =====
+  // ===== あの子（ライトブラウンのツインテール、白い楕円のサングラス、右の頭に黒い角が1本） =====
+  // 服は季節で替わる（日本時間）：夏（6〜9月）＝サメの絵のTシャツ、冬（12〜2月）＝もふもふの服、
+  // それ以外（春・秋）＝マッシュルーム柄の長袖Tシャツ
   // 差し替え用の絵 assets/chara/nazo-peace.png（64×96）があればそれを使う。なければドットで描く
+  function seasonOfHer() {
+    const q = new URLSearchParams(location.search).get('season'); // 確認用: ?season=summer|autumn|winter
+    if (q === 'summer' || q === 'autumn' || q === 'winter') return q;
+    const m = new Date(Date.now() + 9 * 3600e3).getUTCMonth() + 1;
+    if (m >= 6 && m <= 9) return 'summer';
+    if (m === 12 || m <= 2) return 'winter';
+    return 'autumn';
+  }
+
+  // 2色の市松でパレット外の中間色（ライトブラウンなど）を作る
+  function dith(g, x, y, w, h, a, b) {
+    rect(g, x, y, w, h, a);
+    g.fillStyle = P[b];
+    for (let yy = 0; yy < h; yy++) for (let xx = (x + y + yy) % 2; xx < w; xx += 2) g.fillRect(x + xx, y + yy, 1, 1);
+  }
+
   function drawHer(g, x, y, ts) {
     if (img.her) {
       g.drawImage(img.her, x, y);
       return;
     }
+    const hair = (hx, hy, w, h) => dith(g, hx, hy, w, h, 'orange', 'brown');
     const sway = Math.floor(ts / 600) % 2;
-    // ツインテール（左右に垂れる）
-    rect(g, x + 6 - sway, y + 18, 8, 34, 'silver');
-    rect(g, x + 4 - sway, y + 30, 8, 26, 'silver');
-    rect(g, x + 50 + sway, y + 18, 8, 34, 'silver');
-    rect(g, x + 52 + sway, y + 30, 8, 26, 'silver');
-    rect(g, x + 7 - sway, y + 20, 1, 30, 'white');
-    rect(g, x + 53 + sway, y + 20, 1, 30, 'white');
-    // 結び目（黒いゴム）
+    const season = seasonOfHer();
+    // ツインテール
+    hair(x + 6 - sway, y + 18, 8, 34);
+    hair(x + 4 - sway, y + 30, 8, 26);
+    hair(x + 50 + sway, y + 18, 8, 34);
+    hair(x + 52 + sway, y + 30, 8, 26);
+    rect(g, x + 7 - sway, y + 20, 1, 28, 'gold');
+    rect(g, x + 53 + sway, y + 20, 1, 28, 'gold');
     rect(g, x + 10, y + 16, 6, 4, 'ink');
     rect(g, x + 48, y + 16, 6, 4, 'ink');
     // 頭
-    rect(g, x + 16, y + 6, 32, 10, 'silver');
-    rect(g, x + 14, y + 12, 36, 24, 'silver');
-    rect(g, x + 20, y + 7, 12, 2, 'white');
+    hair(x + 16, y + 6, 32, 10);
+    hair(x + 14, y + 12, 36, 24);
+    rect(g, x + 20, y + 7, 12, 1, 'gold');
+    // 右の頭の黒い角（外へ反って上を向く）
+    rect(g, x + 38, y + 4, 6, 4, 'ink');
+    rect(g, x + 41, y + 1, 5, 4, 'ink');
+    rect(g, x + 44, y - 2, 4, 4, 'ink');
+    rect(g, x + 47, y - 5, 3, 4, 'ink');
+    rect(g, x + 49, y - 7, 2, 3, 'ink');
+    rect(g, x + 50, y - 8, 1, 1, 'ink');
+    rect(g, x + 42, y + 2, 1, 2, 'mist');
+    rect(g, x + 45, y - 1, 1, 2, 'mist');
     // 顔
     rect(g, x + 18, y + 18, 28, 22, 'cream');
-    // 前髪
-    rect(g, x + 18, y + 16, 28, 5, 'silver');
-    rect(g, x + 22, y + 21, 4, 2, 'silver');
-    rect(g, x + 34, y + 21, 5, 2, 'silver');
+    hair(x + 18, y + 16, 28, 5);
+    hair(x + 22, y + 21, 4, 2);
+    hair(x + 34, y + 21, 5, 2);
     // 白い楕円フレームのサングラス
     [[x + 19, y + 24], [x + 33, y + 24]].forEach(([gx, gy]) => {
       rect(g, gx + 1, gy, 10, 1, 'white');
@@ -304,17 +331,63 @@
       rect(g, gx, gy + 1, 1, 6, 'white');
       rect(g, gx + 11, gy + 1, 1, 6, 'white');
       rect(g, gx + 1, gy + 1, 10, 6, 'ink');
-      rect(g, gx + 2, gy + 2, 3, 1, 'mist'); // レンズの反射
+      rect(g, gx + 2, gy + 2, 3, 1, 'mist');
     });
     rect(g, x + 31, y + 26, 2, 1, 'white');
-    // 口
     rect(g, x + 29, y + 35, 6, 1, 'maroon');
-    // 首と体（大きめのカーディガン）
     rect(g, x + 28, y + 40, 8, 4, 'cream');
-    rect(g, x + 12, y + 44, 40, 40, 'green');
-    for (let yy = y + 46; yy < y + 84; yy += 4) rect(g, x + 12, yy, 40, 1, 'brown');
-    rect(g, x + 26, y + 44, 12, 40, 'ink'); // 中の黒いTシャツ
-    rect(g, x + 29, y + 50, 6, 6, 'mist');
+    // 服
+    if (season === 'summer') {
+      // 白いTシャツ（半袖）。胸に、口を開けて牙をむくサメ
+      rect(g, x + 14, y + 44, 36, 40, 'white');
+      rect(g, x + 8, y + 44, 8, 8, 'white');
+      rect(g, x + 48, y + 44, 8, 8, 'white');
+      rect(g, x + 9, y + 52, 6, 14, 'cream'); // 腕
+      const sx = x + 20;
+      const sy = y + 52;
+      rect(g, sx + 10, sy, 4, 4, 'mist'); // 背びれ
+      rect(g, sx + 11, sy - 2, 2, 2, 'mist');
+      rect(g, sx, sy + 4, 24, 14, 'mist');
+      rect(g, sx + 2, sy + 12, 20, 6, 'silver'); // 腹
+      rect(g, sx + 3, sy + 9, 18, 6, 'red'); // 開いた口
+      for (let k = 0; k < 6; k++) {
+        rect(g, sx + 4 + k * 3, sy + 9, 2, 2, 'white'); // 上の牙
+        rect(g, sx + 4 + k * 3, sy + 13, 2, 2, 'white'); // 下の牙
+      }
+      rect(g, sx + 5, sy + 6, 2, 2, 'ink'); // 目
+      rect(g, sx - 3, sy + 18, 30, 3, 'blue'); // 波
+      rect(g, sx - 1, sy + 17, 4, 1, 'cyan');
+      rect(g, sx + 12, sy + 17, 4, 1, 'cyan');
+    } else if (season === 'winter') {
+      // もふもふの服（ふちが丸く波打つ）
+      rect(g, x + 10, y + 46, 44, 38, 'cream');
+      for (let k = 0; k < 11; k++) {
+        rect(g, x + 9 + k * 4, y + 44 + (k % 2), 4, 3, 'cream');
+        rect(g, x + 8, y + 48 + k * 3, 3, 2, 'cream');
+        rect(g, x + 53, y + 48 + k * 3, 3, 2, 'cream');
+      }
+      dith(g, x + 12, y + 48, 40, 34, 'cream', 'white');
+      for (let k = 0; k < 10; k++) rect(g, x + 14 + ((k * 13) % 36), y + 50 + ((k * 7) % 30), 2, 1, 'silver');
+      rect(g, x + 28, y + 44, 8, 4, 'pink'); // マフラーの結び目
+      rect(g, x + 24, y + 42, 16, 3, 'pink');
+    } else {
+      // マッシュルーム柄の長袖Tシャツ
+      rect(g, x + 10, y + 44, 44, 40, 'night');
+      rect(g, x + 6, y + 46, 6, 22, 'night'); // 左の長袖
+      for (let yy = 0; yy < 4; yy++) {
+        for (let xx = 0; xx < 4; xx++) {
+          const mx = x + 12 + xx * 10 + (yy % 2) * 5;
+          const my = y + 47 + yy * 9;
+          if (mx > x + 48) continue;
+          rect(g, mx, my, 6, 3, 'red');
+          rect(g, mx + 1, my - 1, 4, 1, 'red');
+          rect(g, mx + 1, my + 1, 1, 1, 'white');
+          rect(g, mx + 4, my, 1, 1, 'white');
+          rect(g, mx + 2, my + 3, 2, 3, 'cream');
+        }
+      }
+      rect(g, x + 50, y + 50, 6, 8, 'night'); // 右の袖口
+    }
     // ピースの手
     rect(g, x + 50, y + 50, 8, 8, 'cream');
     rect(g, x + 51, y + 42, 2, 8, 'cream');
@@ -333,7 +406,7 @@
       g.beginPath();
       g.rect(px, py, PHOTO.w, PHOTO.h);
       g.clip();
-      drawHer(g, px + PHOTO.w - 70, py + PHOTO.h - 96 + 8, shot ? 0 : ts);
+      drawHer(g, px + PHOTO.w - 70, py + PHOTO.h - 96 + 12, shot ? 0 : ts);
       g.restore();
     }
   }
@@ -467,7 +540,7 @@
     RA.text(ctx, 'ぷりにゃん', 128, 40, { size: 32, color: 'pink', align: 'center', outline: 'white' });
     RA.text(ctx, '1996年の色で、きみを撮る', 128, 84, { color: 'cream', align: 'center', outline: 'ink' });
     if (img.neko) ctx.drawImage(img.neko, 0, 0, 32, 32, 40, 108, 64, 64);
-    drawHer(ctx, 140, 104, ts);
+    drawHer(ctx, 140, 112, ts);
     RA.text(ctx, '？？？', 206, 140, { color: 'silver' });
     if (Math.floor(ts / 500) % 2 === 0) {
       RA.text(ctx, DIV_PC ? 'クリック／スペースで入る' : 'タップで入る', 128, 206, { color: 'gold', align: 'center', outline: 'ink' });
