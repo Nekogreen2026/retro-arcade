@@ -15,7 +15,6 @@
   const Plaza = window.Plaza;
   const { bayer, seeded, makeCanvas, painter, pix, dither, line, clamp, jstNow, weekdayIn, dateText } = Plaza.kit;
   const GAMES = (window.GAMES || []).filter((g) => g && g.id);
-  const MOBILE = RA.isMobile();
 
   // ===== 配置（街の座標。左端が0） =====
   const SW = 736; // 街の幅
@@ -745,7 +744,7 @@
     R('red', 597, 72, 19, 16);
     R('red', 595, 74, 23, 12);
     RA.text(g, '0円', 606, 71, { color: 'cream', align: 'center' });
-    // ポケベルの絵（画面に「7105」＝かわいいです）
+    // ポケベルの絵（画面に「7105」＝カワイイ）
     R('ink', 529, 91, 42, 21);
     R('silver', 530, 92, 40, 19);
     R('ink', 532, 94, 36, 11);
@@ -753,8 +752,7 @@
     RA.text(g, '7105', 550, 96, { font: 'en', color: 'ink', align: 'center' });
     R('ink', 534, 107, 5, 2);
     R('ink', 542, 107, 5, 2);
-    RA.text(g, '=ｶﾜｲｲ', 575, 88, { color: 'cream' });
-    RA.text(g, 'ﾃﾞｽ', 583, 98, { color: 'pink' });
+    RA.text(g, '=ｶﾜｲｲ', 575, 93, { color: 'cream' });
   }
 
   function drawNow(g, R, d, cam) {
@@ -978,10 +976,6 @@
     const c = Math.round(cam);
     arrow(g, leftBtn.x + Math.round(leftBtn.w / 2) - 3, leftBtn.y + 7, -1, c > 0 ? 'cream' : 'mist');
     arrow(g, rightBtn.x + Math.round(rightBtn.w / 2) - 3, rightBtn.y + 7, 1, c < MAX_CAM ? 'cream' : 'mist');
-    if (!MOBILE) {
-      RA.text(g, '<- ->', 62, VIEW_H + 10, { font: 'en', color: 'mist', align: 'center' });
-      RA.text(g, 'ENTER', 194, VIEW_H + 10, { font: 'en', color: 'mist', align: 'center' });
-    }
   }
 
   // 左右の三角（先端が1ドット）
@@ -1111,7 +1105,7 @@
     };
   }
 
-  const CHARS = '大須観音巻きういろー名物入口テナント募集広告ポケベル0円=ｶﾜｲｲﾃﾞｽ近日入荷好評稼働中!大須商店街にゃらゲームプラザ名古屋°C()' + LED_TEXT + POSTER_GAMES.map((g) => g.title).join('') + '日月火水木金土';
+  const CHARS = '大須観音巻きういろー名物入口テナント募集広告ポケベル0円=ｶﾜｲｲ近日入荷好評稼働中!大須商店街にゃらゲームプラザ名古屋°C()' + LED_TEXT + POSTER_GAMES.map((g) => g.title).join('') + '日月火水木金土';
 
   Plaza.street = { VIEW_H, CHARS, draw, update, pan, home, doorGap, doorRect, press, move, key, nearness, repaint };
 })();
