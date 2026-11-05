@@ -9,7 +9,6 @@
  *           poster のある台のうち先頭の2台が「好評稼働中!」のポスターになり、押すとそのゲームへ入る
  */
 window.GAMES = [
-  { id: 'iai', title: '居合', desc: '鬼を斬れ。猫天使は斬るな。', color: 'red', thumb: ['assets/oni.png', 'assets/neko.png'], poster: ['assets/neko.png', 'assets/oni.png'] },
-  { id: 'kinshi', title: '菌糸ライフ', desc: '菌を育てよ。萎れても標本だ。', color: 'green', thumb: ['assets/plain-spore.png', 'assets/plain-young.png', 'assets/plain-adult.png'], poster: ['assets/plain-adult.png', 'assets/lamp-adult.png'] },
-  { id: 'uiro', title: '巻き巻きういろう', desc: '流して巻いて、断面で勝負。', color: 'pink', thumb: ['assets/sakura.png', 'assets/matcha.png', 'assets/yuzu.png'] },
+  { id: 'iai', title: '居合', desc: '鬼を斬れ。猫天使は斬るな。', color: 'red', thumb: ['assets/oni.png', 'assets/neko.png'] },
+  { id: 'kinshi', title: '菌糸ライフ', desc: '菌を育てよ。萎れても標本だ。', color: 'green', thumb: ['assets/plain-spore.png', 'assets/plain-young.png', 'assets/plain-adult.png'] },
 ];
