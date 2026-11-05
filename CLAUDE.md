@@ -35,6 +35,7 @@ shared/                 全ゲーム共通の部品（名前空間 RA）
   store.js              localStorage（キーの形式を強制）
   fertilizer.js         ういろう肥料の所持数（RA.Fertilizer。トップページのクイズでもらい、菌糸ライフで使う）
   weather.js            名古屋の季節と天気（RA.Weather。菌糸ライフとトップページで共通）
+  prizes.js             UFOキャッチャーの景品（RA.Prizes。にゃんキャッチャーと店内の景品棚で共通）
 assets/chara/           複数のページで使うキャラクターの絵（<キャラID>-<表情>.png。一覧は README）
 games/<ゲーム名>/       1ゲーム＝1フォルダ（index.html が入口）
 ```
