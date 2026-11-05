@@ -940,6 +940,9 @@
     }
     if (wx >= DOOR.x - 4 && wx < DOOR.x + DOOR.w + 4 && y >= 128 && y < GROUND) return { type: 'enter' };
     if (Math.abs(wx - ANE.x) <= ANE.w / 2 && y >= ANE.foot - ANE.h && y < ANE.foot + 4) return { type: 'ane' };
+    // ういろう屋の陳列ケース → 厨房のミニゲーム「巻き巻きういろう」
+    const uiroGame = GAMES.find((g) => g.id === 'uiro');
+    if (uiroGame && wx >= 150 && wx < 210 && y >= 170 && y < 200) return { type: 'poster', game: uiroGame };
     if (wx >= BOOTH.x && wx < BOOTH.x + BOOTH.w && y >= BOOTH.y && y < GROUND) {
       if (now - phoneAt > 1600) {
         phoneAt = now;
