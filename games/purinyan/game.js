@@ -486,27 +486,84 @@
     drawPhotoContent(sg, 0, 0, 0, shotCanvas);
     drawFrame(sg, FRAMES[frameIdx], 0, 0, 0, true);
     sticker = s;
+    prepareSave();
   }
 
-  function save(ev) {
-    if (!sticker) return;
+  // ===== 保存 =====
+  // スマホは端末の共有メニュー（「画像を保存」で写真アプリへ）、PCと共有メニューのない端末はダウンロード。
+  // 共有はユーザー操作の直後にしか呼べないので、画像のファイルは撮った時点で先に作っておく
+  let saveFile = null; // 共有用の File
+  let saveUrl = null; // ダウンロード用の URL
+  let saveName = '';
+
+  function bigSticker() {
     const big = document.createElement('canvas');
     big.width = STICKER.w * SAVE_SCALE;
     big.height = STICKER.h * SAVE_SCALE;
     const bg = big.getContext('2d');
     bg.imageSmoothingEnabled = false;
     bg.drawImage(sticker, 0, 0, big.width, big.height);
+    return big;
+  }
+
+  function prepareSave() {
     const d = new Date();
-    const name = 'purinyan-' + d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0') + '-' + String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0') + '.png';
-    const url = big.toDataURL('image/png');
+    const two = (n) => String(n).padStart(2, '0');
+    saveName = 'purinyan-' + d.getFullYear() + two(d.getMonth() + 1) + two(d.getDate()) + '-' + two(d.getHours()) + two(d.getMinutes()) + two(d.getSeconds()) + '.png';
+    if (saveUrl) URL.revokeObjectURL(saveUrl);
+    saveFile = null;
+    saveUrl = null;
+    const big = bigSticker();
+    const forSticker = sticker;
+    big.toBlob((blob) => {
+      if (!blob || sticker !== forSticker) return; // 撮り直したあとに届いた古い画像は捨てる
+      saveUrl = URL.createObjectURL(blob);
+      try {
+        saveFile = new File([blob], saveName, { type: 'image/png' });
+      } catch (e) {
+        saveFile = null; // File を作れない古いブラウザ
+      }
+    }, 'image/png');
+  }
+
+  function canShareFile() {
+    if (!RA.isMobile() || !saveFile || !navigator.share || !navigator.canShare) return false;
+    try {
+      return navigator.canShare({ files: [saveFile] });
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function download() {
+    const a = document.createElement('a');
+    a.href = saveUrl || bigSticker().toDataURL('image/png');
+    a.download = saveName || 'purinyan.png';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    showToast('保存したよ');
+  }
+
+  function save(ev) {
+    if (!sticker) return;
+    if (!saveUrl) {
+      showToast('ちょっと待ってね');
+      return;
+    }
+    const share = canShareFile();
     RA.withActivation(ev, () => {
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = name;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      showToast('保存したよ');
+      if (!share) {
+        download();
+        return;
+      }
+      navigator
+        .share({ files: [saveFile], title: 'ぷりにゃん' })
+        .then(() => showToast('シールを渡したよ'))
+        .catch((err) => {
+          if (err && err.name === 'AbortError') return; // 共有メニューを閉じただけ
+          download();
+        });
     });
   }
 
@@ -695,7 +752,7 @@
     });
   }
 
-  const CHARS = '×—…、。「」あいうえかがきくぐけこごさしじすずせそただちってでとどなにぬのはばびぶぷぽまみむめもゃゅよらりるれろわをんィイカガクグゲゴサザシスズタッツテデトドハパピフブプペムメャラリルレンー上下中人今付代位体作使保倍備像入円写出分切前力化反取口右合同名含垂変外大天女子字存完定射小少左差帯年店影感態成戻手抜描換撮敏文日明映替末本枠械楕機残水済準濃灰物状猫率玉用画白目真確秒端結絵緑縁縞縮置美色落角読身輪込選部重鏡面音頭顔飾首髪黒！（）／：？';
+  const CHARS = '×—…、。「」〜あいうえおかがきくぐけこごさしじすずせそただちっつてでとどなにぬねのはばひびふぶぷへべぽまみむめもゃゅょよらりるれろわをんァアィイウカガクグケゲゴサザシスズタダッツテデトドニハパピフブプペホポマムメャヤュユラリルレロン・ー上下中丸人今付代以位体作使保倍傘備像先入共円写冬出分切前力化半反取口古右合同名向含呼垂変夏外大天女子字存季完定射小少届左差市帯年店影待後感態成戻手打抜捨描換撮操敏文日明映春時替月有服末本松枠柄械楕機正残水波済渡準濃灰点牙物状猫率玉用画白目直真確秋秒穴端節結絵緑縁縞縮置羊美耳背胸腕腹色落袋袖角認読赤足身輪込選部重鏡閉開間面音頭顔飾首髪黒！（）／：＝？';
 
   Promise.all([
     loadImage('assets/neko.png'),
