@@ -1,6 +1,6 @@
 /*
  * にゃらゲームプラザ — 画面3 店内（1996年）。
- * 左から クレーンゲーム／筐体（games.js の一覧どおり。空き台は「調整中」）／両替機（上に1996年のカレンダー）／プリクラ機。
+ * 左から クレーンゲーム（押すと「にゃんキャッチャー」へ）／景品棚（取ったぬいぐるみを種類ごとに数で飾る）／筐体（games.js の一覧どおり。空き台は「調整中」）／両替機（上に1996年のカレンダー）／プリクラ機。
  * 筐体を選ぶとそのゲームへ入る。ほかの機械は、押すと少しだけ動いて音が鳴る。
  */
 (function () {
@@ -25,7 +25,8 @@
   const MIN_SLOTS = 4; // 台数が少ないときは調整中の筐体で埋める
   const SLOTS = Math.max(MIN_SLOTS, GAMES.length);
   const UFO = { x: 8, w: 64 };
-  const CAB0 = 84;
+  const SHELF = { x: UFO.x + UFO.w + 8, w: 46 }; // 景品棚
+  const CAB0 = SHELF.x + SHELF.w + 10;
   const slotX = (i) => CAB0 + i * PITCH;
   const CHANGER = { x: slotX(SLOTS - 1) + CAB_W + 18, w: 40 };
   const CAL = { x: CHANGER.x - 6, y: 14, w: 52, h: 70 };
@@ -34,7 +35,8 @@
   const MAX_CAM = Math.max(0, ROOM_W - W);
 
   const ITEMS = [
-    { kind: 'ufo', x: UFO.x, w: UFO.w, top: 40, title: 'クレーンゲーム', desc: '景品は猫ときのこのぬいぐるみ。', color: 'pink' },
+    { kind: 'ufo', x: UFO.x, w: UFO.w, top: 40, title: 'にゃんキャッチャー', desc: '猫・きのこ・サメ、あの子も入ってる。', color: 'pink' },
+    { kind: 'shelf', x: SHELF.x, w: SHELF.w, top: 40, title: '景品棚', desc: shelfDesc(), color: 'gold' },
     ...Array.from({ length: SLOTS }, (_, i) => {
       const g = GAMES[i];
       if (g) return { kind: 'game', game: g, i, x: slotX(i), w: CAB_W, top: CAB_TOP, title: g.title, desc: g.desc, color: g.color || 'gold' };
@@ -475,6 +477,56 @@
     g.restore();
   }
 
+  // 画面の端の左右ボタン（スマホで押しやすい大きさ）
+  const SIDE_W = 20;
+  const SIDE_Y = 70;
+  const SIDE_H = 48;
+  function drawSideButton(g, x, dir, ts) {
+    rect(g, 'ink', x, SIDE_Y, SIDE_W, SIDE_H);
+    rect(g, 'dusk', x + 1, SIDE_Y + 1, SIDE_W - 2, SIDE_H - 2);
+    rect(g, 'mist', x + 2, SIDE_Y + 1, SIDE_W - 4, 1);
+    const color = Math.floor(ts / 400) % 2 ? 'gold' : 'cream';
+    g.fillStyle = P[color];
+    const cx = x + SIDE_W / 2;
+    const cy = SIDE_Y + SIDE_H / 2;
+    for (let i = 0; i < 8; i++) {
+      const xx = dir < 0 ? cx - 4 + i : cx + 3 - i;
+      g.fillRect(xx, cy - i, 1, i * 2 + 1);
+    }
+  }
+
+  // 景品棚：種類ごとに1体ずつ、取った数の札と並べる（取っていない種類は影だけ）
+  function prizeCounts() {
+    return RA.Prizes ? RA.Prizes.load() : {};
+  }
+
+  function shelfDesc() {
+    const c = prizeCounts();
+    const n = Object.values(c).reduce((s, v) => s + (Number(v) || 0), 0);
+    return n ? 'とった景品、ぜんぶで' + n + '個。' : 'にゃんキャッチャーで取った景品が並ぶ。';
+  }
+
+  function drawShelf(g, x, ts) {
+    if (x < -SHELF.w - 4 || x > W + 4 || !RA.Prizes) return;
+    const counts = prizeCounts();
+    // 札
+    rect(g, 'ink', x + 3, 40, SHELF.w - 6, 16);
+    rect(g, 'gold', x + 4, 41, SHELF.w - 8, 14);
+    RA.text(g, '景品', x + SHELF.w / 2, 38, { color: 'maroon', align: 'center' });
+    // 棚の板
+    rect(g, 'ink', x, 58, SHELF.w, FLOOR_Y - 58);
+    rect(g, 'brown', x + 1, 59, SHELF.w - 2, FLOOR_Y - 60);
+    RA.Prizes.TYPES.forEach((t, k) => {
+      const y0 = 60 + k * 18;
+      rect(g, 'maroon', x + 2, y0, SHELF.w - 4, 15);
+      rect(g, 'orange', x + 1, y0 + 15, SHELF.w - 2, 2);
+      const n = Number(counts[t.id]) || 0;
+      const bob = n && Math.floor(ts / 700 + k) % 7 === 0 ? 1 : 0;
+      RA.Prizes.draw(g, t.id, x + 10, y0 + 8 - bob, 1, n ? null : 'night');
+      RA.text(g, n ? 'x' + Math.min(n, 99) : '-', x + 20, y0 + 4, { font: 'en', color: n ? 'cream' : 'mist' });
+    });
+  }
+
   function drawSideArrow(g, x, y, dir, color) {
     g.fillStyle = P[color];
     for (let i = 0; i < 5; i++) g.fillRect(dir < 0 ? x + 4 - i : x + i, y + i, 1, 9 - i * 2);
@@ -492,12 +544,13 @@
       const x = slotX(i) - c;
       if (x > -CAB_W - 4 && x < W + 4) drawCabinet(g, i, x, ts);
     }
+    drawShelf(g, SHELF.x - c, ts);
     drawChanger(g, CHANGER.x - c, ts, now);
     drawPhoto(g, PHOTO.x - c, ts, now);
     drawArrowDown(g, it.x - c + it.w / 2, it.top - 9 + (Math.floor(ts / 300) % 2), 'gold');
     if (!o.hud) return;
-    if (c > 0) drawSideArrow(g, 1, 96, -1, 'gold');
-    if (c < MAX_CAM) drawSideArrow(g, W - 6, 96, 1, 'gold');
+    if (c > 0) drawSideButton(g, 0, -1, ts);
+    if (c < MAX_CAM) drawSideButton(g, W - SIDE_W, 1, ts);
     exitBtn.draw(g, ts);
     const hint = MOBILE ? 'TAP A CABINET TO PLAY' : '<- -> SELECT ENTER PLAY ESC OUT';
     RA.text(g, hint, 128, STRIP_Y + 3, { font: 'en', color: 'silver', align: 'center' });
@@ -524,6 +577,11 @@
     sel = i;
     follow();
     if (it.kind === 'game') return { type: 'game', game: it.game };
+    if (it.kind === 'ufo') return { type: 'game', game: { id: 'ufo' } }; // クレーンゲーム「にゃんキャッチャー」（games/ufo）
+    if (it.kind === 'shelf') {
+      RA.sfx.blip();
+      return null;
+    }
     if (it.kind === 'photo') return { type: 'game', game: { id: 'purinyan' } }; // プリクラ機「ぷりにゃん」（games/purinyan）
     if (it.kind === 'empty') RA.Audio.tone({ f: 140, dur: 0.12, vol: 0.12 });
     else if (it.kind === 'ufo') {
@@ -555,12 +613,12 @@
       exitBtn.flash(now);
       return { type: 'exit' };
     }
-    if (y >= 80 && y < 120) {
-      if (x < EDGE - 1 && Math.round(cam) > 0) {
+    if (y >= SIDE_Y - 6 && y < SIDE_Y + SIDE_H + 6) {
+      if (x < SIDE_W + 2 && Math.round(cam) > 0) {
         select(sel - 1);
         return null;
       }
-      if (x >= W - EDGE + 1 && Math.round(cam) < MAX_CAM) {
+      if (x >= W - SIDE_W - 2 && Math.round(cam) < MAX_CAM) {
         select(sel + 1);
         return null;
       }
