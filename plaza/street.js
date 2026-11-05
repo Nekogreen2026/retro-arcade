@@ -548,12 +548,126 @@
     g.drawImage(im, x + Math.round((box - w) / 2), y + (box - h), w, h);
   }
 
+  // ポスターのない壁：平成のボーイズ＆ガールズが好きそうな、シールとらくがきの壁
+  function drawWall(g, R, i, x, y, ts) {
+    const w = POSTER_W;
+    const h = POSTER_H;
+    const tw = Math.floor(ts / 300);
+    const star = (sx, sy, c) => {
+      R(c, sx, sy - 2, 1, 5);
+      R(c, sx - 2, sy, 5, 1);
+    };
+    const heart = (hx, hy, c) => {
+      R(c, hx, hy, 2, 1);
+      R(c, hx + 3, hy, 2, 1);
+      R(c, hx - 1, hy + 1, 7, 2);
+      R(c, hx, hy + 3, 5, 1);
+      R(c, hx + 1, hy + 4, 3, 1);
+      R(c, hx + 2, hy + 5, 1, 1);
+    };
+    const smile = (cx, cy, r, c) => {
+      for (let yy = -r; yy <= r; yy++) {
+        const half = Math.floor(Math.sqrt(r * r - yy * yy));
+        R(c, cx - half, cy + yy, half * 2 + 1, 1);
+      }
+      R('ink', cx - 3, cy - 3, 2, 3);
+      R('ink', cx + 2, cy - 3, 2, 3);
+      R('ink', cx - 4, cy + 2, 1, 1);
+      R('ink', cx + 4, cy + 2, 1, 1);
+      R('ink', cx - 3, cy + 3, 7, 1);
+    };
+    // 小さなプリクラシール（縁の色＋中に顔）
+    const puri = (px, py, edge, bg, hair) => {
+      R('white', px, py, 16, 13);
+      R(edge, px + 1, py + 1, 14, 11);
+      R(bg, px + 2, py + 2, 12, 9);
+      R(hair, px + 4, py + 3, 8, 3);
+      R('cream', px + 5, py + 5, 6, 5);
+      R('ink', px + 6, py + 7, 1, 1);
+      R('ink', px + 9, py + 7, 1, 1);
+      R('pink', px + 7, py + 9, 2, 1);
+    };
+    R('ink', x, y, w, h);
+    if (i === 0) {
+      // シール帳の壁：パステルの斜めじまに、プリクラとシールを貼りまくる
+      R('cream', x + 1, y + 1, w - 2, h - 2);
+      const st = ['pink', 'cyan', 'gold', 'cream'];
+      for (let yy = 1; yy < h - 1; yy++) {
+        for (let xx = 1; xx < w - 1; xx++) {
+          const band = Math.floor((xx + yy) / 6) % 4;
+          if (band !== 3 && (xx + yy) % 2 === 0) R(st[band], x + xx, y + yy, 1, 1);
+        }
+      }
+      smile(x + 72, y + 16, 10, 'gold');
+      puri(x + 5, y + 5, 'pink', 'cyan', 'brown');
+      puri(x + 24, y + 9, 'cyan', 'pink', 'ink');
+      puri(x + 8, y + 24, 'gold', 'green', 'orange');
+      puri(x + 44, y + 4, 'green', 'gold', 'brown');
+      heart(x + 30, y + 27, 'red');
+      heart(x + 52, y + 24, 'pink');
+      heart(x + 82, y + 34, 'red');
+      R('ink', x + 6, y + 44, 80, 18);
+      R('pink', x + 7, y + 45, 78, 16);
+      RA.text(g, 'LOVE&PEACE', x + w / 2, y + 49, { font: 'en', color: 'white', align: 'center', shadow: 'maroon' });
+      [[x + 40, y + 36], [x + 64, y + 37], [x + 86, y + 8]].forEach(([sx, sy], k) => star(sx, sy, (tw + k) % 2 ? 'white' : 'gold'));
+    } else {
+      // 夜のらくがき壁：ネオン色のタグと、ハイビスカスと、たまご型の電子ペット
+      R('night', x + 1, y + 1, w - 2, h - 2);
+      for (let yy = 4; yy < h - 2; yy += 8) for (let xx = 2 + ((yy >> 3) % 2) * 6; xx < w - 2; xx += 12) R('dusk', x + xx, y + yy, 10, 4); // れんが
+      // ハイビスカス
+      const flower = (fx, fy, c) => {
+        R(c, fx - 2, fy - 6, 5, 4);
+        R(c, fx - 6, fy - 2, 4, 5);
+        R(c, fx + 3, fy - 2, 4, 5);
+        R(c, fx - 4, fy + 3, 4, 4);
+        R(c, fx + 1, fy + 3, 4, 4);
+        R('gold', fx - 1, fy - 1, 3, 3);
+        R('white', fx, fy - 4, 1, 2);
+      };
+      flower(x + 12, y + 14, 'red');
+      flower(x + 80, y + 50, 'pink');
+      // タグ「OSU 96」（にじむスプレーのしずく付き）
+      RA.text(g, 'OSU', x + 28, y + 6, { font: 'en', size: 16, color: 'pink', shadow: 'cyan' });
+      RA.text(g, '96', x + 36, y + 24, { font: 'en', size: 16, color: 'gold', shadow: 'orange' });
+      [[x + 31, 'pink'], [x + 45, 'pink'], [x + 58, 'pink'], [x + 40, 'gold'], [x + 53, 'gold']].forEach(([dx, c], k) => {
+        const len = 3 + ((k * 5 + 2) % 5);
+        R(c, dx, y + (c === 'pink' ? 22 : 40), 1, len);
+      });
+      // たまご型の電子ペット
+      const ex = x + 12;
+      const ey = y + 36;
+      R('ink', ex + 2, ey, 14, 24);
+      R('ink', ex, ey + 4, 18, 16);
+      R('cyan', ex + 3, ey + 1, 12, 22);
+      R('cyan', ex + 1, ey + 5, 16, 14);
+      R('ink', ex + 4, ey + 6, 10, 8);
+      R('green', ex + 5, ey + 7, 8, 6);
+      const blink = tw % 4 === 0;
+      R('ink', ex + 7, ey + 8, 4, 3);
+      if (!blink) R('green', ex + 8, ey + 9, 1, 1);
+      [ex + 4, ex + 8, ex + 12].forEach((bx) => R('pink', bx, ey + 17, 2, 2));
+      // ルーズソックスのらくがき
+      const sx = x + 52;
+      const sy = y + 44;
+      R('white', sx, sy, 7, 12);
+      R('white', sx - 1, sy + 3, 9, 3);
+      R('white', sx - 1, sy + 7, 9, 3);
+      R('ink', sx, sy + 12, 9, 4);
+      R('ink', sx + 7, sy + 14, 4, 2);
+      R('white', sx + 12, sy, 7, 12);
+      R('white', sx + 11, sy + 3, 9, 3);
+      R('white', sx + 11, sy + 7, 9, 3);
+      R('ink', sx + 12, sy + 12, 9, 4);
+      R('ink', sx + 19, sy + 14, 4, 2);
+      [[x + 70, y + 10], [x + 84, y + 24], [x + 6, y + 28]].forEach(([qx, qy], k) => star(qx, qy, (tw + k) % 2 ? 'cyan' : 'white'));
+    }
+  }
+
   function drawPoster(g, R, i, x, y, ts) {
     const game = POSTER_GAMES[i];
     R('ink', x, y, POSTER_W, POSTER_H);
     if (!game) {
-      R('mist', x + 1, y + 1, POSTER_W - 2, POSTER_H - 2);
-      RA.text(g, '近日入荷', x + POSTER_W / 2, y + 24, { color: 'cream', align: 'center' });
+      drawWall(g, R, i, x, y, ts);
       return;
     }
     R(game.color || 'red', x + 1, y + 1, POSTER_W - 2, 17);
@@ -631,15 +745,16 @@
     R('red', 597, 72, 19, 16);
     R('red', 595, 74, 23, 12);
     RA.text(g, '0円', 606, 71, { color: 'cream', align: 'center' });
-    // ポケベルの絵（画面に「0840」）
+    // ポケベルの絵（画面に「7105」＝かわいいです）
     R('ink', 529, 91, 42, 21);
     R('silver', 530, 92, 40, 19);
     R('ink', 532, 94, 36, 11);
     R('green', 533, 95, 34, 9);
-    RA.text(g, '0840', 550, 96, { font: 'en', color: 'ink', align: 'center' });
+    RA.text(g, '7105', 550, 96, { font: 'en', color: 'ink', align: 'center' });
     R('ink', 534, 107, 5, 2);
     R('ink', 542, 107, 5, 2);
-    RA.text(g, '=ｵﾊﾖｳ', 575, 93, { color: 'cream' });
+    RA.text(g, '=ｶﾜｲｲ', 575, 88, { color: 'cream' });
+    RA.text(g, 'ﾃﾞｽ', 583, 98, { color: 'pink' });
   }
 
   function drawNow(g, R, d, cam) {
@@ -996,7 +1111,7 @@
     };
   }
 
-  const CHARS = '大須観音巻きういろー名物入口テナント募集広告ポケベル0円=ｵﾊﾖｳ近日入荷好評稼働中!大須商店街にゃらゲームプラザ名古屋°C()' + LED_TEXT + POSTER_GAMES.map((g) => g.title).join('') + '日月火水木金土';
+  const CHARS = '大須観音巻きういろー名物入口テナント募集広告ポケベル0円=ｶﾜｲｲﾃﾞｽ近日入荷好評稼働中!大須商店街にゃらゲームプラザ名古屋°C()' + LED_TEXT + POSTER_GAMES.map((g) => g.title).join('') + '日月火水木金土';
 
   Plaza.street = { VIEW_H, CHARS, draw, update, pan, home, doorGap, doorRect, press, move, key, nearness, repaint };
 })();
