@@ -33,12 +33,16 @@
   const KNIFE_SPEED = [70, 95, 125]; // 客ごとの包丁の速さ（ドット/秒）
 
   // ===== 生地 =====
+  // 味ごとのクセ：rate＝流れる速さの倍率、cold／tear＝巻くときの冷え・裂けの境目のずれ、
+  // heavy＝巻きの加速の倍率、speck＝断面と生地に散る粒の色（衣・泡）
   const DOUGH = [
-    { id: 'shiro', name: '白', color: 'cream', dark: 'silver', label: 'ink' },
-    { id: 'sakura', name: '桜', color: 'pink', dark: 'maroon', label: 'white' },
-    { id: 'matcha', name: '抹茶', color: 'green', dark: 'ink', label: 'white' },
-    { id: 'kuro', name: '黒', color: 'brown', dark: 'ink', label: 'white' },
-    { id: 'yuzu', name: '柚子', color: 'gold', dark: 'orange', label: 'ink' },
+    { id: 'shiro', name: '白', color: 'cream', dark: 'silver', label: 'ink', rate: 1, hint: '素直な生地' },
+    { id: 'sakura', name: '桜', color: 'pink', dark: 'maroon', label: 'white', rate: 1, tear: -10, hint: '裂けやすいよ' },
+    { id: 'matcha', name: '抹茶', color: 'green', dark: 'ink', label: 'white', rate: 1, cold: 8, hint: '冷めやすいよ' },
+    { id: 'kuro', name: '黒糖', color: 'maroon', dark: 'ink', label: 'white', rate: 0.6, hint: 'どろっと重い' },
+    { id: 'yuzu', name: '柚子', color: 'gold', dark: 'orange', label: 'ink', rate: 1.7, hint: 'さらさら速い' },
+    { id: 'ramune', name: 'ラムネ', color: 'cyan', dark: 'blue', label: 'ink', rate: 1.25, speck: 'white', hint: 'しゅわしゅわ' },
+    { id: 'misokatsu', name: '味噌カツ', color: 'brown', dark: 'ink', label: 'white', rate: 0.8, heavy: 0.75, speck: 'orange', hint: '衣入りで重いがね' },
   ];
   const D = Object.fromEntries(DOUGH.map((d, i) => [d.id, i]));
 
@@ -47,11 +51,14 @@
     { who: '平成女児', hair: 'brown', ribbon: 'pink', say: 'ぜんぶパステルにして〜！', order: ['sakura', 'shiro', 'yuzu'] },
     { who: '平成女児', hair: 'ink', ribbon: 'cyan', say: '桜と白を交互にね！', order: ['sakura', 'shiro', 'sakura', 'shiro'] },
     { who: 'ご隠居', hair: 'silver', ribbon: null, say: '抹茶多めでたのむわ', order: ['matcha', 'matcha', 'shiro'] },
-    { who: 'ご隠居', hair: 'white', ribbon: null, say: '黒と抹茶で渋くしてちょう', order: ['kuro', 'matcha', 'kuro'] },
+    { who: 'ご隠居', hair: 'white', ribbon: null, say: '黒糖と抹茶で渋くしてちょう', order: ['kuro', 'matcha', 'kuro'] },
     { who: 'OL', hair: 'brown', ribbon: 'gold', say: '柚子と白でさっぱりね', order: ['yuzu', 'shiro', 'yuzu'] },
     { who: 'OL', hair: 'ink', ribbon: 'red', say: '五色ぜんぶ入れてちょ', order: ['shiro', 'sakura', 'matcha', 'kuro', 'yuzu'] },
     { who: '高校生', hair: 'orange', ribbon: 'green', say: '抹茶と桜でかわいく！', order: ['matcha', 'sakura', 'matcha'] },
-    { who: '大工さん', hair: 'ink', ribbon: null, say: '黒と白、どえりゃあ濃くな', order: ['kuro', 'shiro', 'kuro', 'shiro'] },
+    { who: '大工さん', hair: 'ink', ribbon: null, say: '味噌カツ味、どえりゃあ頼むわ', order: ['misokatsu', 'shiro', 'misokatsu'] },
+    { who: '大工さん', hair: 'brown', ribbon: null, say: '黒糖と味噌カツで腹にたまるやつ', order: ['kuro', 'misokatsu', 'kuro', 'misokatsu'] },
+    { who: '平成女児', hair: 'orange', ribbon: 'pink', say: 'ラムネと桜でしゅわっと！', order: ['ramune', 'sakura', 'ramune'] },
+    { who: '高校生', hair: 'ink', ribbon: 'cyan', say: '味噌カツとラムネ…まじで？', order: ['misokatsu', 'ramune', 'misokatsu'] },
   ];
 
   const REACTION = [
@@ -94,7 +101,10 @@
   const topBtn = new RA.Button({ x: 132, y: 196, w: 76, h: 22, label: 'もどる' });
 
   // 色のボタン（下の段に5つ）
-  const doughBtns = DOUGH.map((d, i) => ({ x: 6 + i * 50, y: 196, w: 44, h: 36, i }));
+  // 上の段に4つ、下の段に3つ
+  const doughBtns = DOUGH.map((d, i) =>
+    i < 4 ? { x: 2 + i * 63, y: 196, w: 61, h: 21, i } : { x: 2 + (i - 4) * 84, y: 218, w: 82, h: 21, i }
+  );
 
   function setPhase(p, ts) {
     phase = p;
@@ -168,8 +178,12 @@
 
   function startGuest(ts) {
     const g = guests[gi];
+    const used = g.order.map((id) => DOUGH[D[id]]);
     round = {
       guest: g,
+      cold: ROLL_COLD + Math.max(0, ...used.map((d) => d.cold || 0)),
+      tear: ROLL_TEAR + Math.min(0, ...used.map((d) => d.tear || 0)),
+      heavy: Math.min(1, ...used.map((d) => d.heavy || 1)),
       layers: [], // { d: 生地番号, h: 厚み }
       pouring: -1, // 流している生地（-1 は流していない）
       pourLevel: 0,
@@ -249,19 +263,19 @@
     const r = round;
     if (ts < since) return; // 流し終わりの余韻
     const el = (ts - since) / 1000;
-    if (rolling()) r.speed = Math.min(100, r.speed + ROLL_ACCEL * dt);
+    if (rolling()) r.speed = Math.min(100, r.speed + ROLL_ACCEL * r.heavy * dt);
     else r.speed = Math.max(0, r.speed - ROLL_DECEL * dt);
     r.progress = Math.min(100, r.progress + r.speed * ROLL_PROGRESS * dt);
     r.rollTime += dt;
     if (el > ROLL_GRACE) {
       r.countTime += dt;
-      if (r.speed < ROLL_COLD) {
+      if (r.speed < r.cold) {
         const before = r.coldTime;
         r.coldTime += dt;
         if (Math.floor(before / 0.7) !== Math.floor(r.coldTime / 0.7)) snd.cold();
-      } else if (r.speed <= ROLL_TEAR) r.goodTime += dt;
+      } else if (r.speed <= r.tear) r.goodTime += dt;
     }
-    if (r.speed > ROLL_TEAR) {
+    if (r.speed > r.tear) {
       r.overTime += dt;
       if (r.overTime >= TEAR_TIME) {
         r.tears++;
@@ -390,7 +404,9 @@
         let u = (((s % pitch) + pitch) % pitch) / pitch;
         let li = cum.findIndex((v) => u < v);
         if (li < 0) li = layers.length - 1;
-        let col = DOUGH[layers[li].d].color;
+        const dl = DOUGH[layers[li].d];
+        let col = dl.color;
+        if (dl.speck && ((Math.imul(x, 73856093) ^ Math.imul(y, 19349663)) >>> 0) % 6 === 0) col = dl.speck;
         if (rr < 2.2) col = DOUGH[layers[0].d].color;
         // 裂け目
         for (const ta of tearAngles) {
@@ -451,7 +467,7 @@
           startPour(b.i, performance.now());
         }
       } else {
-        const n = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5'].indexOf(code);
+        const n = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7'].indexOf(code);
         if (n >= 0) {
           holdKeys.set(code, 'dough:' + n);
           startPour(n, performance.now());
@@ -523,7 +539,7 @@
     const dt = Math.min(0.05, Math.max(0, (ts - lastTs) / 1000));
     if (!round) return;
     if (phase === 'pour' && round.pouring >= 0) {
-      round.pourLevel = Math.min(LAYER_MAX, round.pourLevel + POUR_RATE * dt);
+      round.pourLevel = Math.min(LAYER_MAX, round.pourLevel + POUR_RATE * DOUGH[round.pouring].rate * dt);
       if (ts - round.lastTick > 120) {
         snd.pourTick();
         round.lastTick = ts;
@@ -629,7 +645,7 @@
     let top = TRAY.base;
     r.layers.forEach((l) => {
       const d = DOUGH[l.d];
-      rect(TRAY.x, top - l.h, TRAY.w, l.h, d.color);
+      layerRect(TRAY.x, top - l.h, TRAY.w, l.h, d, ts);
       rect(TRAY.x, top - l.h, TRAY.w, 1, d.dark);
       top -= l.h;
     });
@@ -640,7 +656,7 @@
       const sx = TRAY.x + TRAY.w / 2 - 3;
       const wig = Math.floor(ts / 80) % 2;
       rect(sx + wig, 70, 6, top - h - 70, d.color);
-      rect(TRAY.x, top - h, TRAY.w, h, d.color);
+      layerRect(TRAY.x, top - h, TRAY.w, h, d, ts);
       // 杓子
       rect(sx - 8, 64, 22, 6, 'silver');
       rect(sx + 12, 62, 20, 3, 'brown');
@@ -658,12 +674,26 @@
     doughBtns.forEach((b) => {
       const d = DOUGH[b.i];
       const on = round && round.pouring === b.i;
-      const y = b.y + (on ? 2 : 0);
-      frame(b.x, y, b.w, b.h - (on ? 2 : 0), d.color);
-      if (!on) rect(b.x + 2, y + b.h - 4, b.w - 4, 2, d.dark);
-      RA.text(ctx, d.name, b.x + b.w / 2, y + 4, { color: d.label, align: 'center' });
-      if (DIV === 'pc') RA.text(ctx, String(b.i + 1), b.x + b.w / 2, y + 23, { font: 'en', color: d.label, align: 'center' });
+      const y = b.y + (on ? 1 : 0);
+      frame(b.x, y, b.w, b.h - (on ? 1 : 0), d.color);
+      if (d.speck) for (let k = 0; k < 6; k++) rect(b.x + 4 + ((k * 23) % (b.w - 8)), y + 3 + ((k * 7) % (b.h - 6)), 1, 1, d.speck);
+      if (!on) rect(b.x + 2, y + b.h - 3, b.w - 4, 1, d.dark);
+      const nx = DIV === 'pc' ? b.x + b.w / 2 + 4 : b.x + b.w / 2;
+      RA.text(ctx, d.name, nx, y + 1, { color: d.label, align: 'center' });
+      if (DIV === 'pc') RA.text(ctx, String(b.i + 1), b.x + 4, y + 7, { font: 'en', color: d.label });
     });
+  }
+
+  // 生地の層を塗る。衣や泡のある味は粒を散らす（泡はちらちら動く）
+  function layerRect(x, y, w, h, d, ts) {
+    rect(x, y, w, h, d.color);
+    if (!d.speck || h < 1) return;
+    const shift = d.id === 'ramune' ? Math.floor(ts / 200) : 0;
+    for (let yy = 0; yy < h; yy++) {
+      for (let xx = (yy * 5 + shift) % 7; xx < w; xx += 7) {
+        if ((xx * 3 + yy * 11 + shift) % 4 === 0) rect(x + xx, y + yy, 1, 1, d.speck);
+      }
+    }
   }
 
   // 巻いている最中の絵：右へ伸びる生地の板と、左で太っていく巻き
@@ -681,7 +711,7 @@
     r.layers.forEach((l) => {
       const d = DOUGH[l.d];
       const h = Math.max(1, Math.round((l.h / totalH) * sheetH));
-      rect(sheetLeft, y - h, TRAY.x + TRAY.w - sheetLeft, h, d.color);
+      layerRect(sheetLeft, y - h, TRAY.x + TRAY.w - sheetLeft, h, d, ts);
       y -= h;
     });
     rect(TRAY.x - 4, TRAY.base, TRAY.w + 8, 3, 'silver');
@@ -711,9 +741,9 @@
     const h = 100;
     frame(x - 2, top - 2, 20, h + 4, 'ink', 'silver');
     const yOf = (v) => top + h - Math.round((v / 100) * h);
-    rect(x, yOf(ROLL_COLD), 16, yOf(0) - yOf(ROLL_COLD), 'blue');
-    rect(x, yOf(ROLL_TEAR), 16, yOf(ROLL_COLD) - yOf(ROLL_TEAR), 'green');
-    rect(x, yOf(100), 16, yOf(ROLL_TEAR) - yOf(100), 'red');
+    rect(x, yOf(r.cold), 16, yOf(0) - yOf(r.cold), 'blue');
+    rect(x, yOf(r.tear), 16, yOf(r.cold) - yOf(r.tear), 'green');
+    rect(x, yOf(100), 16, yOf(r.tear) - yOf(100), 'red');
     const vy = yOf(r.speed);
     rect(x - 4, vy - 1, 24, 3, 'white');
     rect(x - 6, vy - 2, 3, 5, 'gold');
@@ -805,6 +835,9 @@
     drawDoughButtons(ts);
     if (r.layers.length === 0 && r.pouring < 0) {
       RA.text(ctx, '押してるあいだ流れるよ', 128, 160, { color: 'cream', align: 'center', outline: 'ink' });
+    } else if (r.pouring >= 0) {
+      const d = DOUGH[r.pouring];
+      RA.text(ctx, d.name + '：' + d.hint, 128, 160, { color: 'cream', align: 'center', outline: 'ink' });
     }
   }
 
@@ -822,8 +855,8 @@
     // 声
     let msg = null;
     if (ts < r.tearFlash) msg = ['裂けた！', 'red'];
-    else if (r.speed > ROLL_TEAR) msg = ['速すぎ！裂けるよ', 'red'];
-    else if (ts - since > ROLL_GRACE * 1000 && r.speed < ROLL_COLD) msg = ['冷えてまう…', 'cyan'];
+    else if (r.speed > r.tear) msg = ['速すぎ！裂けるよ', 'red'];
+    else if (ts - since > ROLL_GRACE * 1000 && r.speed < r.cold) msg = ['冷えてまう…', 'cyan'];
     if (msg) RA.text(ctx, msg[0], 112, 70, { color: msg[1], align: 'center', outline: 'ink' });
     // 押す場所
     const pressing = rolling();
@@ -941,7 +974,7 @@
     });
   }
 
-  const CHARS = '—…→、。「」【】〜あいうえおかがきぎくけこごさしじすずせぜそただちっつてでとどなにねのはばぱひびぶへべほまみむめもゃゅょよらりるれろわをんェキクゲジスタッテトドパフプベペホボマリルン・ー一丁上下両並中乱互五交人以伝伸位体何余作保修倍児入具円冷出切刻前力加効包印厚厨受口台右号合名周営回固地場塗壁声売多大太央女姉始子安定客対小少居屋層工左己巻平店後得態成房所手抹押指描揺数整文斜断新方日時景更最本札杓来板果柚校格桜楕業横欠止正段気決注流渋減渦満濃点状生画番白目真秒称程端終絵続緑線縞縦置習職背自色茶落行裂見計記語読象転込速進遅遊道部配録長開間隠離面音韻順須顔食高髪黒！（）／：';
+  const CHARS = '—…→、。「」【】〜あいうえおかがきぎくけこごさしじすずせぜそただちっつてでとどなにねのはばぱひびぶへべほまみむめもゃやゅょよらりるれろわをんェカキクゲジスセタッツテトドネパフプベペホボマムラリルン・ー一丁上下両並中乱互五交人以伝伸位体何余作保修倍児入具円冷出切刻前力加効動包印厚厨受口台右号合名周味営噌回固地場塗境壁声売多大太央女姉始子安定客対小少居屋層工左己巻平店後得態成房所手抹押指描揺散数整文斜断新方日時景更最本札杓来板果柚校格桜楕業横欠止正段気決泡注流渋減渦満点状率生画番白目直真秒称程端粒糖素終絵続緑線縞縦置習職背腹自色茶落行衣裂見計記語読象転込速進遅遊道部配重録長開間隠離面音韻順須頼顔食高髪黒！（）／：＝？';
 
   Promise.all([
     loadImage('../../assets/chara/ane-idle.png'),
